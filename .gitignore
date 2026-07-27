@@ -48,3 +48,12 @@ app.*.map.json
 .env
 .env.local
 
+
+# Android release signing — NEVER commit. Store the keystore + password
+# somewhere safe (password manager). Losing them means you can never
+# update the app under the same identity again.
+android/key.properties
+android/*.jks
+android/*.keystore
+android/app/*.jks
+android/app/*.keystore

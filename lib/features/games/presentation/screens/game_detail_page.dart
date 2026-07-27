@@ -1325,10 +1325,12 @@ Future<void> _persistAndPrint(
     final gameIdForLookup = l.subGameId ?? game.id;
     final override = prizeByGameId[gameIdForLookup];
     final prize = _rescalePrize(l.amount, l.prize, override);
+    final pairEasyPrize = _resolvePairEasyPrize(l, override);
     return CreateTicketLine(
       label: l.label,
       amount: l.amount,
       prize: prize,
+      pairEasyPrize: pairEasyPrize,
       subGameId: l.subGameId,
       subGameName: l.subGameName,
     );
@@ -1493,6 +1495,26 @@ int _rescalePrize(int amount, int existingPrize, EffectiveGamePrize? o) {
     return amount * target;
   }
   return existingPrize;
+}
+
+/// Snapshot del premio "par" (fácil sobre número ganador con dígitos
+/// repetidos). Solo se llena si:
+///   1. El juego evaluado es Juega 3 (por slug — es una regla de negocio
+///      específica, no de tipo THREE_DIGIT; Gana 3 y Tresmonazo comparten
+///      tipo pero no la regla).
+///   2. La línea es fácil (sufijo `(F)` en el label, misma convención que
+///      el backend en `TicketEvaluator`).
+///   3. La sucursal tiene `pairEasyMultiplier` efectivo no-null para ese
+///      juego.
+/// Devuelve null si algún check falla; el backend cae al `prize` estándar.
+int? _resolvePairEasyPrize(_RequestLine l, EffectiveGamePrize? o) {
+  if (o == null) return null;
+  if (o.gameSlug != 'juega3') return null;
+  final pair = o.pairEasyMultiplier;
+  if (pair == null) return null;
+  final isFacil = RegExp(r'\(F\)', caseSensitive: false).hasMatch(l.label);
+  if (!isFacil) return null;
+  return l.amount * pair;
 }
 
 class _NotFound extends StatelessWidget {

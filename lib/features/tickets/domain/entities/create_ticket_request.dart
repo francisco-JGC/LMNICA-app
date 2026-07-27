@@ -5,6 +5,7 @@ class CreateTicketLine extends Equatable {
     required this.label,
     required this.amount,
     required this.prize,
+    this.pairEasyPrize,
     this.subGameId,
     this.subGameName,
   });
@@ -12,6 +13,13 @@ class CreateTicketLine extends Equatable {
   final String label;
   final int amount;
   final int prize;
+
+  /// Snapshot del premio si esta línea gana por fácil Y el número ganador
+  /// tiene dígitos repetidos ("premio par"). Solo se envía en líneas
+  /// fácil de Juega 3 cuando la sucursal tiene el multiplicador par
+  /// configurado. Null → la regla no aplica; el backend usa `prize`.
+  final int? pairEasyPrize;
+
   final String? subGameId;
   final String? subGameName;
 
@@ -19,12 +27,14 @@ class CreateTicketLine extends Equatable {
         'label': label,
         'amount': amount,
         'prize': prize,
+        if (pairEasyPrize != null) 'pairEasyPrize': pairEasyPrize,
         if (subGameId != null) 'subGameId': subGameId,
         if (subGameName != null) 'subGameName': subGameName,
       };
 
   @override
-  List<Object?> get props => [label, amount, prize, subGameId, subGameName];
+  List<Object?> get props =>
+      [label, amount, prize, pairEasyPrize, subGameId, subGameName];
 }
 
 class CreateTicketRequest extends Equatable {
