@@ -45,6 +45,23 @@ import '../../domain/entities/game.dart';
 import '../../domain/entities/game_type.dart';
 import '../state/games_controller.dart';
 
+/// True mientras un `_persistAndPrint` está en curso — desde el momento en
+/// que el botón se toca hasta que termina (o falla). Cubre la ventana entre
+/// el click y `printerState.isPrinting` prendiéndose adentro de
+/// `printer_controller.printTicket()`, durante la cual el usuario podría
+/// pulsar el botón dos veces y crear tickets duplicados en el backend.
+class TicketSubmittingController extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void setValue(bool value) => state = value;
+}
+
+final ticketSubmittingProvider =
+    NotifierProvider<TicketSubmittingController, bool>(
+  TicketSubmittingController.new,
+);
+
 class GameDetailPage extends ConsumerWidget {
   const GameDetailPage({required this.gameId, this.game, super.key});
 
@@ -81,6 +98,7 @@ class _RegularGameView extends ConsumerWidget {
     final cart = ref.watch(cartControllerProvider(game.id));
     final controller = ref.read(cartControllerProvider(game.id).notifier);
     final printerState = ref.watch(printerControllerProvider);
+    final submitting = ref.watch(ticketSubmittingProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -131,7 +149,7 @@ class _RegularGameView extends ConsumerWidget {
             _TotalBar(
               total: cart.total,
               numberCount: cart.count,
-              isPrinting: printerState.isPrinting,
+              isPrinting: printerState.isPrinting || submitting,
               onPrint: () => _printRegular(context, ref, game, cart),
             ),
         ],
@@ -189,6 +207,7 @@ class _DateGameView extends ConsumerWidget {
     final controller =
         ref.read(dateCartControllerProvider(game.id).notifier);
     final printerState = ref.watch(printerControllerProvider);
+    final submitting = ref.watch(ticketSubmittingProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -252,7 +271,7 @@ class _DateGameView extends ConsumerWidget {
             _TotalBar(
               total: cart.total,
               numberCount: cart.count,
-              isPrinting: printerState.isPrinting,
+              isPrinting: printerState.isPrinting || submitting,
               onPrint: () => _printDates(context, ref, game, cart),
             ),
         ],
@@ -281,6 +300,7 @@ class _MultiSorteoGameViewState
   Widget build(BuildContext context) {
     final gamesAsync = ref.watch(gamesControllerProvider);
     final printerState = ref.watch(printerControllerProvider);
+    final submitting = ref.watch(ticketSubmittingProvider);
 
     final subGames = (gamesAsync.value ?? const <Game>[])
         .where((g) => g.type != GameType.multiSorteo && g.id != widget.game.id)
@@ -349,7 +369,9 @@ class _MultiSorteoGameViewState
               _MultiTotalBar(
                 total: cartSummary.total * _selectedDrawAts.length,
                 ticketCount: _selectedDrawAts.length,
-                isPrinting: _isBatchPrinting || printerState.isPrinting,
+                isPrinting: _isBatchPrinting ||
+                    printerState.isPrinting ||
+                    submitting,
                 onPrint: () => _printMultiSorteoDraws(sub),
               ),
           ],
@@ -872,6 +894,7 @@ class _ComboGameView extends ConsumerWidget {
     final controller =
         ref.read(comboCartControllerProvider(game.id).notifier);
     final printerState = ref.watch(printerControllerProvider);
+    final submitting = ref.watch(ticketSubmittingProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -949,7 +972,7 @@ class _ComboGameView extends ConsumerWidget {
             _TotalBar(
               total: cart.total,
               numberCount: cart.count,
-              isPrinting: printerState.isPrinting,
+              isPrinting: printerState.isPrinting || submitting,
               onPrint: () => _printCombo(context, ref, game, cart),
             ),
         ],
@@ -969,6 +992,7 @@ class _Gana3GameView extends ConsumerWidget {
     final controller =
         ref.read(gana3CartControllerProvider(game.id).notifier);
     final printerState = ref.watch(printerControllerProvider);
+    final submitting = ref.watch(ticketSubmittingProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -1051,7 +1075,7 @@ class _Gana3GameView extends ConsumerWidget {
             _TotalBar(
               total: cart.total,
               numberCount: cart.count,
-              isPrinting: printerState.isPrinting,
+              isPrinting: printerState.isPrinting || submitting,
               onPrint: () => _printGana3(context, ref, game, cart),
             ),
         ],
@@ -1273,6 +1297,40 @@ typedef _RequestLine = ({
 });
 
 Future<void> _persistAndPrint(
+  BuildContext context,
+  WidgetRef ref, {
+  required Game game,
+  required String? client,
+  required List<_RequestLine> lines,
+  required TicketPayload Function(TicketReceipt) buildPayload,
+  required VoidCallback onSuccess,
+  DateTime? drawAt,
+  bool skipLockCheck = false,
+}) async {
+  // Guard reentrante: si otra submission ya arrancó y todavía no terminó,
+  // no la volvemos a disparar. Esto atrapa el doble tap sobre el botón
+  // "Imprimir" — sin esto se creaban dos tickets en el backend porque el
+  // `printerState.isPrinting` no se prende hasta después de crear el ticket.
+  if (ref.read(ticketSubmittingProvider)) return;
+  ref.read(ticketSubmittingProvider.notifier).setValue(true);
+  try {
+    await _persistAndPrintInner(
+      context,
+      ref,
+      game: game,
+      client: client,
+      lines: lines,
+      buildPayload: buildPayload,
+      onSuccess: onSuccess,
+      drawAt: drawAt,
+      skipLockCheck: skipLockCheck,
+    );
+  } finally {
+    ref.read(ticketSubmittingProvider.notifier).setValue(false);
+  }
+}
+
+Future<void> _persistAndPrintInner(
   BuildContext context,
   WidgetRef ref, {
   required Game game,

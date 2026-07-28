@@ -95,6 +95,7 @@ class _QuickGana3BetFormState extends State<QuickGana3BetForm> {
     }
 
     _numberCtrl.clear();
+    _amountCtrl.clear();
     setState(() => _errorMessage = null);
     _numberFocus.requestFocus();
   }

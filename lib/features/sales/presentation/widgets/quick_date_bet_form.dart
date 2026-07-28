@@ -96,6 +96,7 @@ class _QuickDateBetFormState extends State<QuickDateBetForm> {
     }
 
     _dayCtrl.clear();
+    _amountCtrl.clear();
     setState(() => _errorMessage = null);
     _dayFocus.requestFocus();
   }

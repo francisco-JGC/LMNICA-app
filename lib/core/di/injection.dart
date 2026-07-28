@@ -12,6 +12,9 @@ import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/auth/domain/usecases/load_session.dart';
 import '../../features/auth/domain/usecases/login.dart';
 import '../../features/auth/domain/usecases/logout.dart';
+import '../../features/feature_flags/data/datasources/feature_flags_remote_datasource.dart';
+import '../../features/feature_flags/data/repositories/feature_flags_repository_impl.dart';
+import '../../features/feature_flags/domain/repositories/feature_flags_repository.dart';
 import '../../features/game_prizes/data/datasources/game_prizes_remote_datasource.dart';
 import '../../features/game_prizes/data/repositories/game_prizes_repository_impl.dart';
 import '../../features/game_prizes/domain/repositories/game_prizes_repository.dart';
@@ -111,6 +114,17 @@ Future<void> configureDependencies() async {
   _registerLuckyFeature();
   _registerSettingsFeature();
   _registerPrinterFeature();
+  _registerFeatureFlagsFeature();
+}
+
+void _registerFeatureFlagsFeature() {
+  getIt
+    ..registerLazySingleton<FeatureFlagsRemoteDatasource>(
+      () => FeatureFlagsRemoteDatasourceImpl(client: getIt()),
+    )
+    ..registerLazySingleton<FeatureFlagsRepository>(
+      () => FeatureFlagsRepositoryImpl(remote: getIt()),
+    );
 }
 
 void _registerAuthFeature() {

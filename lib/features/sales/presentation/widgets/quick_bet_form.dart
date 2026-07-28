@@ -92,6 +92,7 @@ class _QuickBetFormState extends State<QuickBetForm> {
     }
 
     _numberCtrl.clear();
+    _amountCtrl.clear();
     setState(() => _errorMessage = null);
     _numberFocus.requestFocus();
   }

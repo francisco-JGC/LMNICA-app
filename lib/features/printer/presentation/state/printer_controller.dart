@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -9,21 +11,47 @@ import 'printer_state.dart';
 
 enum _PermissionOutcome { granted, denied, permanentlyDenied }
 
-// NOTE: we do NOT poll the printer's connection status. Cheap SPP thermal
-// printers interpret the probe bytes that the plugin sends on
-// `connectionStatus` as raw data and slowly feed paper. If the socket dies
-// silently, the next print attempt will surface it via a failed write, and
-// we reconnect from there.
+// NOTE: we do NOT poll the printer's connection status via probe writes.
+// Cheap SPP thermal printers interpret the probe bytes as raw data and
+// slowly feed paper. Print failures surface a broken socket lazily.
+// El polling adaptativo de RECONNECT (abajo) es distinto: no toca la
+// impresora, solo revisa el flag `bluetoothEnabled` del sistema y reintenta
+// conectar si volvió a estar disponible.
+
+/// Cada cuánto reintenta autoReconnect cuando la impresora está
+/// desconectada. 8s es un tradeoff sensato: el vendedor ve la reconexión
+/// dentro de ~10-15s desde que prende BT, sin gastarle batería.
+const _kReconnectPollInterval = Duration(seconds: 8);
 
 class PrinterController extends Notifier<PrinterState> {
   late final _repository = getIt<PrinterRepository>();
+  Timer? _reconnectTimer;
+
+  /// Evita que dos autoReconnect corran solapados: el `connect()` de BT
+  /// puede tardar 5-15s en fallar y nuestro tick es cada 8s, así que sin
+  /// esta guarda podríamos apilar intentos y pisarnos el estado.
+  bool _isReconnecting = false;
 
   @override
   PrinterState build() {
+    // Timer siempre vivo mientras el provider exista. Cuando está conectado
+    // cada tick es un no-op de memoria (early return por `state.isConnected`).
+    // Cuando está desconectado, dispara autoReconnect que sí mira BT y last-
+    // connected. Sin manual start/stop — el estado del `state` es el gate.
+    _reconnectTimer = Timer.periodic(_kReconnectPollInterval, (_) {
+      if (state.isConnected) return;
+      autoReconnect();
+    });
+    ref.onDispose(() {
+      _reconnectTimer?.cancel();
+      _reconnectTimer = null;
+    });
     return const PrinterState.initial();
   }
 
   Future<void> autoReconnect() async {
+    if (_isReconnecting) return;
+    _isReconnecting = true;
     try {
       final connectedResult = await _repository.isConnected();
       final alreadyConnected = connectedResult.getOrElse((_) => false);
@@ -43,6 +71,8 @@ class PrinterController extends Notifier<PrinterState> {
       );
     } catch (_) {
       // Silent: auto-reconnect never surfaces errors to the UI.
+    } finally {
+      _isReconnecting = false;
     }
   }
 
@@ -151,9 +181,14 @@ class PrinterController extends Notifier<PrinterState> {
     state = state.copyWith(isPrinting: true, clearError: true);
     final result = await _repository.printTest();
     result.match(
+      // Un fallo en imprimir suele significar socket muerto (impresora
+      // apagada, sin batería, fuera de rango). Limpiamos `connectedDevice`
+      // para que el polling adaptativo se despierte y reintente conectar
+      // hasta que la impresora vuelva.
       (failure) => state = state.copyWith(
         isPrinting: false,
         errorMessage: failure.message,
+        clearConnectedDevice: true,
       ),
       (_) => state = state.copyWith(isPrinting: false),
     );
@@ -163,9 +198,11 @@ class PrinterController extends Notifier<PrinterState> {
     state = state.copyWith(isPrinting: true, clearError: true);
     final result = await _repository.printTicket(payload);
     result.match(
+      // Ver comentario en printTest — misma lógica.
       (failure) => state = state.copyWith(
         isPrinting: false,
         errorMessage: failure.message,
+        clearConnectedDevice: true,
       ),
       (_) => state = state.copyWith(isPrinting: false),
     );

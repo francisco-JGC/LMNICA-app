@@ -5,11 +5,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/di/injection.dart';
 import '../../../../core/utils/business_time.dart';
+import '../../../feature_flags/presentation/state/feature_flags_controller.dart';
 import '../../domain/entities/draw_schedule.dart';
 import '../../domain/repositories/schedules_repository.dart';
 
 const _postDrawGraceMinutes = 3;
 const _tickInterval = Duration(seconds: 15);
+
+/// Cierre nocturno: después del último sorteo del día, el juego queda
+/// bloqueado hasta esta hora (business time, Managua) del día siguiente.
+/// Regla de negocio universal — el mismo horario para todos los juegos.
+const _kNightlyReopenHour = 6;
 
 class GameLockState extends Equatable {
   const GameLockState({
@@ -19,6 +25,7 @@ class GameLockState extends Equatable {
     this.reopenAt,
     this.nextDrawAt,
     this.nextCutoffMinutes,
+    this.isNightly = false,
     this.errorMessage,
   });
 
@@ -30,6 +37,13 @@ class GameLockState extends Equatable {
   final DateTime? reopenAt;
   final DateTime? nextDrawAt;
   final int? nextCutoffMinutes;
+
+  /// Cuando el bloqueo actual proviene de la ventana nocturna (después del
+  /// último sorteo del día hasta las 06:00 del siguiente), no de una
+  /// ventana de sorteo real. El UI muestra un mensaje distinto y no ancla
+  /// a un `currentDrawAt`.
+  final bool isNightly;
+
   final String? errorMessage;
 
   bool get isLocked => status == GameLockStatus.locked;
@@ -43,6 +57,7 @@ class GameLockState extends Equatable {
         reopenAt,
         nextDrawAt,
         nextCutoffMinutes,
+        isNightly,
         errorMessage,
       ];
 }
@@ -61,6 +76,10 @@ class GameLockController extends Notifier<GameLockState> {
   @override
   GameLockState build() {
     ref.onDispose(() => _timer?.cancel());
+    // Recompute cuando cambia el feature flag: si el admin apaga
+    // `nightly_lock` desde el panel web y el móvil refetchea, tenemos que
+    // desbloquear el juego sin esperar al próximo tick de 15s.
+    ref.listen(featureFlagsControllerProvider, (_, _) => _recompute());
     Future.microtask(_load);
     return const GameLockState.unknown();
   }
@@ -104,16 +123,24 @@ class GameLockController extends Notifier<GameLockState> {
         return;
       }
       if (!now.isAfter(w.lockEnd)) {
+        // El "próximo" desde una nocturna es el próximo sorteo REAL del
+        // día siguiente. Excluimos ventanas nocturnas al buscar next para
+        // no encadenar cierres nocturnos como si fueran sorteos.
         final next = windows
-            .where((x) => x.drawAt.isAfter(w.drawAt))
+            .where((x) =>
+                !x.isNightly && x.drawAt.isAfter(w.drawAt))
             .fold<_Window?>(null, (acc, x) => acc ?? x);
         state = GameLockState(
           status: GameLockStatus.locked,
-          currentDrawAt: w.drawAt,
-          currentCutoffMinutes: w.cutoffMinutes,
+          // En cierre nocturno no hay sorteo real "actual" — omitimos
+          // currentDrawAt/currentCutoffMinutes para que el UI muestre
+          // el mensaje adecuado.
+          currentDrawAt: w.isNightly ? null : w.drawAt,
+          currentCutoffMinutes: w.isNightly ? null : w.cutoffMinutes,
           reopenAt: w.lockEnd,
           nextDrawAt: next?.drawAt,
           nextCutoffMinutes: next?.cutoffMinutes,
+          isNightly: w.isNightly,
         );
         return;
       }
@@ -128,9 +155,23 @@ class GameLockController extends Notifier<GameLockState> {
     // Anchor day iteration at Managua midnight so DOW math is stable
     // regardless of the device's timezone.
     final bizToday = DateTime.utc(biz.year, biz.month, biz.day);
+
+    // Feature flag: cuando el admin apaga `nightly_lock` desde el panel web
+    // (típicamente para pruebas), no inyectamos las ventanas virtuales de
+    // cierre nocturno. Default seguro cuando la flag no está en el snapshot
+    // (offline al arrancar): mantener el cierre nocturno prendido, así el
+    // comportamiento no se relaja por un fetch fallido.
+    final flags = ref.read(featureFlagsControllerProvider);
+    final nightlyEnabled = flags['nightly_lock']?.enabled ?? true;
+
+    // Track lockEnd más tardío por día (business day) para poder inyectar la
+    // ventana nocturna después del último sorteo del día. Clave: yyyymmdd.
+    final lastLockEndByDay = <int, DateTime>{};
+
     for (int offset = 0; offset <= 7; offset++) {
       final day = bizToday.add(Duration(days: offset));
       final weekday = day.weekday % 7;
+      final dayKey = day.year * 10000 + day.month * 100 + day.day;
       for (final s in schedules) {
         if (!s.appliesTo(weekday)) continue;
         final t = s.parsedTime;
@@ -145,6 +186,13 @@ class GameLockController extends Notifier<GameLockState> {
             drawAt.subtract(Duration(minutes: s.cutoffMinutes));
         final lockEnd =
             drawAt.add(const Duration(minutes: _postDrawGraceMinutes));
+        // Registramos el lockEnd más tardío del día ANTES del filtro de
+        // "pasadas" — si el último sorteo del día ya terminó (nowUtc > lockEnd)
+        // igual necesitamos la ventana nocturna que arranca ahí.
+        final prev = lastLockEndByDay[dayKey];
+        if (prev == null || lockEnd.isAfter(prev)) {
+          lastLockEndByDay[dayKey] = lockEnd;
+        }
         if (lockEnd.isBefore(nowUtc)) continue;
         windows.add(_Window(
           drawAt: drawAt,
@@ -154,7 +202,49 @@ class GameLockController extends Notifier<GameLockState> {
         ));
       }
     }
-    windows.sort((a, b) => a.drawAt.compareTo(b.drawAt));
+
+    // Ventanas nocturnas virtuales: desde el final del último sorteo de cada
+    // día hasta las 06:00 del día siguiente (business time). No tienen drawAt
+    // real — el algoritmo de `_recompute` las trata igual que a cualquier
+    // otra: si `now` cae adentro, el juego queda locked con reopenAt = 06:00.
+    // Skip cuando la flag `nightly_lock` está apagada.
+    if (!nightlyEnabled) {
+      windows.sort((a, b) => a.lockStart.compareTo(b.lockStart));
+      return windows;
+    }
+    for (final entry in lastLockEndByDay.entries) {
+      final lockStart = entry.value;
+      final dayKey = entry.key;
+      // Día siguiente (business time). Descomponemos el key para no depender
+      // del mismo `day` que ya iteramos arriba.
+      final year = dayKey ~/ 10000;
+      final month = (dayKey ~/ 100) % 100;
+      final day = dayKey % 100;
+      final nextDay =
+          DateTime.utc(year, month, day).add(const Duration(days: 1));
+      final reopenAt = BusinessTime.toUtc(
+        year: nextDay.year,
+        month: nextDay.month,
+        day: nextDay.day,
+        hour: _kNightlyReopenHour,
+        minute: 0,
+      );
+      // Si la ventana nocturna ya terminó antes del "ahora", no aporta nada.
+      if (!reopenAt.isAfter(nowUtc)) continue;
+      // Si otro sorteo del día siguiente cae antes de las 06:00 (poco
+      // probable pero posible), el `lockEnd` real sigue siendo 06:00 y esa
+      // ventana temprana quedará "adentro" del cierre nocturno — el
+      // algoritmo de match resuelve por la primera ventana que contiene now.
+      windows.add(_Window(
+        drawAt: lockStart, // usamos lockStart como ancla temporal para el sort
+        lockStart: lockStart,
+        lockEnd: reopenAt,
+        cutoffMinutes: 0,
+        isNightly: true,
+      ));
+    }
+
+    windows.sort((a, b) => a.lockStart.compareTo(b.lockStart));
     return windows;
   }
 }
@@ -165,12 +255,17 @@ class _Window {
     required this.lockStart,
     required this.lockEnd,
     required this.cutoffMinutes,
+    this.isNightly = false,
   });
 
   final DateTime drawAt;
   final DateTime lockStart;
   final DateTime lockEnd;
   final int cutoffMinutes;
+
+  /// True para ventanas virtuales de cierre nocturno; el `drawAt` en ese
+  /// caso es solo un ancla temporal (== lockStart), no un sorteo real.
+  final bool isNightly;
 }
 
 final gameLockControllerProvider =

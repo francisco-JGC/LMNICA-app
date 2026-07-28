@@ -23,19 +23,73 @@ class ScanTicketPage extends ConsumerStatefulWidget {
   ConsumerState<ScanTicketPage> createState() => _ScanTicketPageState();
 }
 
-class _ScanTicketPageState extends ConsumerState<ScanTicketPage> {
-  final MobileScannerController _controller = MobileScannerController();
+class _ScanTicketPageState extends ConsumerState<ScanTicketPage>
+    with WidgetsBindingObserver {
+  // Acotamos formatos y detectionSpeed para reducir el trabajo del plugin
+  // nativo — menos frames en vuelo = menos ventana para el race que produce
+  // el NPE `Attempt to invoke virtual method on null` reportado en release.
+  final MobileScannerController _controller = MobileScannerController(
+    formats: const [BarcodeFormat.qrCode],
+    detectionSpeed: DetectionSpeed.normal,
+  );
   bool _busy = false;
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    // El scanner debe pausarse cuando la app pierde foco (llamada entrante,
+    // notificación que interrumpe, usuario cambia de app). Si dejamos la
+    // cámara viva mientras Android le quita recursos, el plugin nativo
+    // termina operando sobre un scanner interno null → NPE. Suscribirnos
+    // al ciclo de vida es la principal medida preventiva del race.
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // Reanudar el scanner al volver a foreground. Envuelto en try/catch
+        // porque `start()` puede tirar si la cámara todavía está liberándose.
+        _safeStart();
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        _safeStop();
+    }
+  }
+
+  Future<void> _safeStart() async {
+    try {
+      await _controller.start();
+    } catch (_) {
+      // No propagamos: si el start falla el usuario verá el frame estático
+      // y puede reintentar navegando adentro/afuera. Mejor que un crash.
+    }
+  }
+
+  Future<void> _safeStop() async {
+    try {
+      await _controller.stop();
+    } catch (_) {
+      // Stop puede fallar si el controller ya está detenido — no importa.
+    }
+  }
+
   Future<void> _onDetect(BarcodeCapture capture) async {
-    if (_busy) return;
+    // `!mounted` guard descarta callbacks tardíos que llegan después de que
+    // el usuario ya salió de la página — sin esto el plugin puede seguir
+    // entregando frames mientras el state se está destruyendo.
+    if (_busy || !mounted) return;
     final raw = capture.barcodes
         .map((b) => b.rawValue)
         .firstWhere((v) => v != null && v.isNotEmpty, orElse: () => null);
@@ -55,14 +109,14 @@ class _ScanTicketPageState extends ConsumerState<ScanTicketPage> {
     final either = await getIt<TicketsRepository>().findById(id);
     if (!mounted) return;
 
-    either.match(
+    await either.match(
       (failure) {
         setState(() {
           _busy = false;
           _error = 'No se encontró el boleto: ${failure.message}';
         });
       },
-      (detail) {
+      (detail) async {
         if (detail.summary.gameId != widget.game.id) {
           setState(() {
             _busy = false;
@@ -78,6 +132,11 @@ class _ScanTicketPageState extends ConsumerState<ScanTicketPage> {
           return;
         }
         final count = _loadIntoCart(detail);
+        // Detener explícitamente el scanner ANTES del pop drena los frames
+        // en vuelo y evita que el plugin nativo intente entregar un frame
+        // sobre estado ya disposable (fuente del NPE en release).
+        await _safeStop();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('$count números cargados')),
         );

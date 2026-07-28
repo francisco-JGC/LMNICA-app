@@ -92,6 +92,7 @@ class _QuickComboBetFormState extends State<QuickComboBetForm> {
     }
 
     _numberCtrl.clear();
+    _amountCtrl.clear();
     setState(() => _errorMessage = null);
     _numberFocus.requestFocus();
   }
