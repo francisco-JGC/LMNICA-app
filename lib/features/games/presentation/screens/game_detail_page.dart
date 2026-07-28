@@ -62,6 +62,14 @@ final ticketSubmittingProvider =
   TicketSubmittingController.new,
 );
 
+/// Guard duro sincrónico contra reentradas de `_persistAndPrint`. Vive
+/// paralelo al Notifier porque el rebuild del widget que deshabilita el
+/// botón es asíncrono — un doble tap muy rápido puede colar la segunda
+/// llamada antes de que el UI vea el estado nuevo. Este bool no depende
+/// del ciclo de Flutter/Riverpod, solo del event loop de Dart, así que
+/// dos taps back-to-back en el mismo micro-turno también quedan cubiertos.
+bool _submissionInFlight = false;
+
 class GameDetailPage extends ConsumerWidget {
   const GameDetailPage({required this.gameId, this.game, super.key});
 
@@ -1307,11 +1315,11 @@ Future<void> _persistAndPrint(
   DateTime? drawAt,
   bool skipLockCheck = false,
 }) async {
-  // Guard reentrante: si otra submission ya arrancó y todavía no terminó,
-  // no la volvemos a disparar. Esto atrapa el doble tap sobre el botón
-  // "Imprimir" — sin esto se creaban dos tickets en el backend porque el
-  // `printerState.isPrinting` no se prende hasta después de crear el ticket.
-  if (ref.read(ticketSubmittingProvider)) return;
+  // Guard duro primero: bool sincrónico a nivel de módulo. Atrapa el
+  // reentry aunque el rebuild del provider aún no haya llegado al widget.
+  if (_submissionInFlight) return;
+  _submissionInFlight = true;
+  // Y el provider además, para que el botón cambie visualmente a disabled.
   ref.read(ticketSubmittingProvider.notifier).setValue(true);
   try {
     await _persistAndPrintInner(
@@ -1326,6 +1334,7 @@ Future<void> _persistAndPrint(
       skipLockCheck: skipLockCheck,
     );
   } finally {
+    _submissionInFlight = false;
     ref.read(ticketSubmittingProvider.notifier).setValue(false);
   }
 }
