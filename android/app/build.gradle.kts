@@ -49,6 +49,15 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
+            // R8 corre por default en release y strippea clases de ML Kit
+            // que `mobile_scanner` carga por reflection → NPE al primer
+            // escaneo. Estas reglas mantienen las clases necesarias vivas.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
