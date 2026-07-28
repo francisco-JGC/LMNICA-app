@@ -38,9 +38,12 @@ import '../../../sales/presentation/widgets/random_form.dart';
 import '../../../schedules/presentation/state/available_draws_provider.dart';
 import '../../../schedules/presentation/state/game_lock_controller.dart';
 import '../../../schedules/presentation/widgets/game_lock_gate.dart';
+import '../../../settings/domain/entities/billing_method.dart';
+import '../../../settings/presentation/state/settings_controller.dart';
 import '../../../tickets/domain/entities/create_ticket_request.dart';
 import '../../../tickets/domain/entities/ticket_receipt.dart';
 import '../../../tickets/domain/usecases/create_ticket.dart';
+import '../../../whatsapp_billing/presentation/services/ticket_image_share_service.dart';
 import '../../domain/entities/game.dart';
 import '../../domain/entities/game_type.dart';
 import '../state/games_controller.dart';
@@ -824,7 +827,7 @@ class _AvailableDrawsSelector extends ConsumerWidget {
   }
 }
 
-class _MultiTotalBar extends StatelessWidget {
+class _MultiTotalBar extends ConsumerWidget {
   const _MultiTotalBar({
     required this.total,
     required this.ticketCount,
@@ -838,7 +841,9 @@ class _MultiTotalBar extends StatelessWidget {
   final VoidCallback onPrint;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final method = ref.watch(settingsControllerProvider).value ??
+        BillingMethod.bluetoothPrinter;
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -879,8 +884,8 @@ class _MultiTotalBar extends StatelessWidget {
                         color: Colors.white,
                       ),
                     )
-                  : const Icon(Icons.print),
-              label: Text('Imprimir $ticketCount'),
+                  : Icon(_iconFor(method)),
+              label: Text('${method.actionLabel} $ticketCount'),
               onPressed: isPrinting ? null : onPrint,
             ),
           ],
@@ -889,6 +894,13 @@ class _MultiTotalBar extends StatelessWidget {
     );
   }
 }
+
+/// Icono para el botón según el método de facturación activo. Se comparte
+/// entre `_TotalBar` y `_MultiTotalBar`.
+IconData _iconFor(BillingMethod method) => switch (method) {
+      BillingMethod.bluetoothPrinter => Icons.print,
+      BillingMethod.whatsapp => Icons.share,
+    };
 
 
 class _ComboGameView extends ConsumerWidget {
@@ -1354,6 +1366,8 @@ Future<void> _persistAndPrintInner(
   final printer = ref.read(printerControllerProvider);
   final salePoint = ref.read(activeSalePointProvider).selected;
   final lock = ref.read(gameLockControllerProvider(game.id));
+  final billingMethod =
+      ref.read(settingsControllerProvider).value ?? BillingMethod.bluetoothPrinter;
 
   if (!skipLockCheck && lock.isLocked) {
     messenger.showSnackBar(const SnackBar(
@@ -1367,7 +1381,9 @@ Future<void> _persistAndPrintInner(
     ));
     return;
   }
-  if (!printer.isConnected) {
+  // El check de impresora conectada solo aplica cuando el método activo la
+  // requiere. Para whatsapp no hace falta impresora — se genera imagen.
+  if (billingMethod == BillingMethod.bluetoothPrinter && !printer.isConnected) {
     messenger.showSnackBar(const SnackBar(
       content: Text(
         'No hay impresora conectada. Ve a Configuración → Impresora.',
@@ -1429,14 +1445,34 @@ Future<void> _persistAndPrintInner(
   ref.invalidate(saleLimitAvailabilityProvider);
 
   final payload = buildPayload(receipt);
-  await ref.read(printerControllerProvider.notifier).printTicket(payload);
-  final after = ref.read(printerControllerProvider);
-  if (after.errorMessage != null) {
-    messenger.showSnackBar(SnackBar(
-      content: Text('Ticket #${receipt.folio} registrado, pero falló la '
-          'impresión: ${after.errorMessage}'),
-    ));
-    return;
+
+  // Bifurcación por método de facturación. El ticket YA quedó persistido en
+  // el backend arriba — acá solo cambia cómo se lo entregamos al cliente.
+  // Si la entrega falla (impresora perdida, share cancelado), el ticket
+  // sigue existiendo y se puede reintentar desde el historial.
+  switch (billingMethod) {
+    case BillingMethod.bluetoothPrinter:
+      await ref.read(printerControllerProvider.notifier).printTicket(payload);
+      final after = ref.read(printerControllerProvider);
+      if (after.errorMessage != null) {
+        messenger.showSnackBar(SnackBar(
+          content: Text('Ticket #${receipt.folio} registrado, pero falló la '
+              'impresión: ${after.errorMessage}'),
+        ));
+        return;
+      }
+    case BillingMethod.whatsapp:
+      if (!context.mounted) return;
+      final shared = await const TicketImageShareService()
+          .share(context: context, payload: payload);
+      if (!context.mounted) return;
+      if (!shared) {
+        messenger.showSnackBar(SnackBar(
+          content: Text('Ticket #${receipt.folio} registrado, pero falló la '
+              'generación de la imagen para compartir.'),
+        ));
+        return;
+      }
   }
 
   onSuccess();
@@ -1478,7 +1514,7 @@ class _EmptyView extends StatelessWidget {
   }
 }
 
-class _TotalBar extends StatelessWidget {
+class _TotalBar extends ConsumerWidget {
   const _TotalBar({
     required this.total,
     required this.numberCount,
@@ -1492,7 +1528,9 @@ class _TotalBar extends StatelessWidget {
   final VoidCallback onPrint;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final method = ref.watch(settingsControllerProvider).value ??
+        BillingMethod.bluetoothPrinter;
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -1533,8 +1571,8 @@ class _TotalBar extends StatelessWidget {
                         color: Colors.white,
                       ),
                     )
-                  : const Icon(Icons.print),
-              label: const Text('Imprimir'),
+                  : Icon(_iconFor(method)),
+              label: Text(method.actionLabel),
               onPressed: isPrinting ? null : onPrint,
             ),
           ],

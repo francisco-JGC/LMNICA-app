@@ -32,6 +32,7 @@ class SettingsPage extends ConsumerWidget {
               for (final m in BillingMethod.values)
                 RadioListTile<BillingMethod>(
                   title: Text(m.displayName),
+                  subtitle: Text(m.description),
                   value: m,
                 ),
               const Divider(),

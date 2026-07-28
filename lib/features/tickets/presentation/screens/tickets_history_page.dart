@@ -12,6 +12,7 @@ import '../../../games/domain/entities/game.dart';
 import '../../../games/presentation/state/games_controller.dart';
 import '../../../printer/domain/entities/ticket_payload.dart' as printer;
 import '../../../printer/presentation/state/printer_controller.dart';
+import '../../../whatsapp_billing/presentation/services/ticket_image_share_service.dart';
 import '../../domain/entities/ticket_detail.dart';
 import '../../domain/entities/ticket_summary.dart';
 import '../../domain/repositories/tickets_repository.dart';
@@ -301,6 +302,8 @@ class _TicketMenu extends ConsumerWidget {
         switch (value) {
           case 'reprint':
             await _reprint(context, ref);
+          case 'resend':
+            await _resend(context, ref);
           case 'void':
             await _confirmVoid(context, ref, ticket);
         }
@@ -311,6 +314,13 @@ class _TicketMenu extends ConsumerWidget {
           child: ListTile(
             leading: Icon(Icons.print_outlined),
             title: Text('Reimprimir'),
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'resend',
+          child: ListTile(
+            leading: Icon(Icons.share_outlined),
+            title: Text('Reenviar por WhatsApp'),
           ),
         ),
         if (!ticket.isVoided)
@@ -346,13 +356,10 @@ class _TicketMenu extends ConsumerWidget {
         ));
       },
       (detail) async {
-        final gameNameResolved = game?.name ?? '—';
-        final gameSlugResolved = game?.slug ?? '';
         final payload = _buildPayload(
           detail: detail,
-          gameName: gameNameResolved,
-          gameSlug: gameSlugResolved,
           seller: ref.read(currentUserProvider)?.name,
+          footer: '(Reimpresion)',
         );
         await ref.read(printerControllerProvider.notifier).printTicket(payload);
         if (!context.mounted) return;
@@ -370,18 +377,47 @@ class _TicketMenu extends ConsumerWidget {
     );
   }
 
+  Future<void> _resend(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    final either = await getIt<TicketsRepository>().findById(ticket.id);
+    if (!context.mounted) return;
+    await either.match(
+      (failure) async {
+        messenger.showSnackBar(SnackBar(
+          content: Text('No se pudo cargar el boleto: ${failure.message}'),
+        ));
+      },
+      (detail) async {
+        final payload = _buildPayload(
+          detail: detail,
+          seller: ref.read(currentUserProvider)?.name,
+          footer: '(Reenvio)',
+        );
+        if (!context.mounted) return;
+        final shared = await const TicketImageShareService()
+            .share(context: context, payload: payload);
+        if (!context.mounted) return;
+        if (!shared) {
+          messenger.showSnackBar(const SnackBar(
+            content: Text('No se pudo generar la imagen del ticket.'),
+          ));
+        }
+      },
+    );
+  }
+
   printer.TicketPayload _buildPayload({
     required TicketDetail detail,
-    required String gameName,
-    required String gameSlug,
     required String? seller,
+    required String footer,
   }) {
     final summary = detail.summary;
     return printer.TicketPayload(
       id: summary.id,
       gameId: summary.gameId,
-      gameSlug: gameSlug,
-      gameName: gameName,
+      gameSlug: game?.slug ?? '',
+      gameName: game?.name ?? '—',
       lines: detail.lines
           .map((l) => printer.TicketLine(
                 number: l.label,
@@ -395,7 +431,7 @@ class _TicketMenu extends ConsumerWidget {
       drawAt: summary.drawAt,
       seller: seller,
       client: summary.client,
-      footer: '(Reimpresion)',
+      footer: footer,
     );
   }
 }
