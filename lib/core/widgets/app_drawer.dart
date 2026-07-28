@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../features/auth/domain/entities/user_role.dart';
 import '../navigation/nav_item.dart';
@@ -45,6 +46,8 @@ class AppDrawer extends ConsumerWidget {
                 ],
               ),
             ),
+            const Divider(height: 1),
+            const _VersionFooter(),
           ],
         ),
       ),
@@ -170,6 +173,43 @@ class _NavGroupView extends StatelessWidget {
             selected: currentRoute == item.route,
           ),
       ],
+    );
+  }
+}
+
+/// Footer del sidebar con la versión de la app leída del `pubspec.yaml`
+/// en runtime via `package_info_plus`. Se refresca sola al reinstalar sin
+/// que haya que tocar código — la fuente de verdad es el `version:` del
+/// pubspec compilado en el APK.
+class _VersionFooter extends StatelessWidget {
+  const _VersionFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snapshot) {
+        final info = snapshot.data;
+        final label = info == null
+            ? ' '
+            : 'v${info.version} (${info.buildNumber})';
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.black38,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
