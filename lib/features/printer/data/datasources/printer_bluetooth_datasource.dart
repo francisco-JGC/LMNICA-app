@@ -129,16 +129,24 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
     final g = Generator(PaperSize.mm58, profile);
     final dateOnly = DateFormat('dd/MM/yyyy');
     final shortDate = DateFormat('dd/MM');
+    // `.toLocal()` es obligatorio: los DateTime que vienen del backend
+    // (reimpresiones, reenvíos) llegan en UTC. Sin convertir a hora local
+    // el ticket físico salía con la hora adelantada 6h (offset UTC-6 de
+    // Managua). En una venta nueva `DateTime.now()` ya es local, así que
+    // `.toLocal()` es un no-op y es seguro llamarlo siempre.
     String formatDateTime(DateTime d) {
-      final t = DateFormat('h:mm a', 'en_US').format(d).toLowerCase();
-      return '${dateOnly.format(d)} $t';
+      final local = d.toLocal();
+      final t = DateFormat('h:mm a', 'en_US').format(local).toLowerCase();
+      return '${dateOnly.format(local)} $t';
     }
     String formatDrawHint(DateTime d) {
-      final t = DateFormat('h:mm a', 'en_US').format(d).toLowerCase();
+      final local = d.toLocal();
+      final t = DateFormat('h:mm a', 'en_US').format(local).toLowerCase();
       final now = DateTime.now();
-      final sameDay =
-          d.year == now.year && d.month == now.month && d.day == now.day;
-      return sameDay ? t : '${shortDate.format(d)} $t';
+      final sameDay = local.year == now.year &&
+          local.month == now.month &&
+          local.day == now.day;
+      return sameDay ? t : '${shortDate.format(local)} $t';
     }
     final money = kAmountFormat;
 
@@ -163,7 +171,7 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
       ...g.text('  Fecha: ${formatDateTime(p.date)}', styles: infoStyle),
       ...g.text(
         '  Sorteo: ${p.gameName}'
-        '${p.drawAt != null ? ' - ${formatDrawHint(p.drawAt!.toLocal())}' : ''}',
+        '${p.drawAt != null ? ' - ${formatDrawHint(p.drawAt!)}' : ''}',
         styles: infoStyle,
       ),
       if (p.seller != null)
