@@ -15,9 +15,15 @@ class DioClient {
     _dio = Dio(
       BaseOptions(
         baseUrl: _baseUrl(),
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 20),
-        sendTimeout: const Duration(seconds: 20),
+        // Timeouts pensados para operar con datos móviles flakeados y
+        // hosting con cold-start (Railway/Render suspenden la instancia
+        // por inactividad; despertar puede tomar 15-25s la primera
+        // request de la mañana). Antes eran 15s de connect y 20s de
+        // receive/send — se veía como TimeoutException para el vendedor
+        // aunque la operación fuera legítima.
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+        sendTimeout: const Duration(seconds: 30),
         headers: {'Content-Type': 'application/json'},
       ),
     );
