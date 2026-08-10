@@ -11,11 +11,37 @@ import '../../domain/usecases/list_my_tickets.dart';
 import '../../domain/usecases/void_my_ticket.dart';
 
 class TicketsHistoryFilters {
-  const TicketsHistoryFilters({this.from, this.to});
+  const TicketsHistoryFilters({
+    this.from,
+    this.to,
+    this.gameId,
+    this.drawTime,
+  });
 
   final DateTime? from;
   final DateTime? to;
+  /// Filtro por juego (null = todos los juegos).
+  final String? gameId;
+  /// Filtro por hora del sorteo en "HH:MM" (null = todos los sorteos).
+  final String? drawTime;
+
+  TicketsHistoryFilters copyWith({
+    DateTime? from,
+    DateTime? to,
+    Object? gameId = _sentinel,
+    Object? drawTime = _sentinel,
+  }) {
+    return TicketsHistoryFilters(
+      from: from ?? this.from,
+      to: to ?? this.to,
+      gameId: identical(gameId, _sentinel) ? this.gameId : gameId as String?,
+      drawTime:
+          identical(drawTime, _sentinel) ? this.drawTime : drawTime as String?,
+    );
+  }
 }
+
+const Object _sentinel = Object();
 
 class TicketsHistoryFiltersNotifier extends Notifier<TicketsHistoryFilters> {
   @override
@@ -28,7 +54,22 @@ class TicketsHistoryFiltersNotifier extends Notifier<TicketsHistoryFilters> {
   }
 
   void set({DateTime? from, DateTime? to}) {
-    state = TicketsHistoryFilters(from: from, to: to);
+    state = TicketsHistoryFilters(
+      from: from,
+      to: to,
+      gameId: state.gameId,
+      drawTime: state.drawTime,
+    );
+  }
+
+  void setGame(String? gameId) {
+    // Al cambiar de juego, reseteamos drawTime porque las horas de
+    // sorteo dependen del juego elegido.
+    state = state.copyWith(gameId: gameId, drawTime: null);
+  }
+
+  void setDrawTime(String? drawTime) {
+    state = state.copyWith(drawTime: drawTime);
   }
 
   void clear() => state = const TicketsHistoryFilters();
@@ -95,6 +136,8 @@ class TicketsHistoryController extends AsyncNotifier<List<TicketSummary>> {
       salePointId: salePoint.id,
       from: filters.from,
       to: filters.to,
+      gameId: filters.gameId,
+      drawTime: filters.drawTime,
       limit: 200,
     ));
     return result.fold(

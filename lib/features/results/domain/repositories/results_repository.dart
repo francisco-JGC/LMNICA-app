@@ -31,18 +31,23 @@ class ListWinnersQuery {
   const ListWinnersQuery({
     this.salePointId,
     this.gameId,
+    this.drawTime,
     this.from,
     this.to,
   });
 
   final String? salePointId;
   final String? gameId;
+  /// "HH:MM" wall clock en Managua para filtrar solo ganadores de
+  /// sorteos que ocurren a esa hora.
+  final String? drawTime;
   final DateTime? from;
   final DateTime? to;
 
   Map<String, dynamic> toQueryParameters() => {
         if (salePointId != null) 'salePointId': salePointId,
         if (gameId != null) 'gameId': gameId,
+        if (drawTime != null) 'drawTime': drawTime,
         if (from != null) 'from': BusinessTime.toBusinessIso(from!),
         if (to != null) 'to': BusinessTime.toBusinessIso(to!),
       };

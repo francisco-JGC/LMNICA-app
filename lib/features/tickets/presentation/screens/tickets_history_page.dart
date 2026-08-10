@@ -8,6 +8,7 @@ import '../../../../core/session/current_user.dart';
 import '../../../../core/utils/currency.dart';
 import '../../../../core/utils/time_format.dart';
 import '../../../../core/widgets/date_range_field.dart';
+import '../../../../core/widgets/game_draw_filter_bar.dart';
 import '../../../games/domain/entities/game.dart';
 import '../../../games/presentation/state/games_controller.dart';
 import '../../../printer/domain/entities/ticket_payload.dart' as printer;
@@ -43,7 +44,7 @@ class TicketsHistoryPage extends ConsumerWidget {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
             child: Builder(builder: (context) {
               final now = DateTime.now();
               final today = DateTime(now.year, now.month, now.day);
@@ -63,6 +64,20 @@ class TicketsHistoryPage extends ConsumerWidget {
                     .set(from: from, to: to),
               );
             }),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: GameDrawFilterBar(
+              games: games,
+              selectedGameId: filters.gameId,
+              selectedDrawTime: filters.drawTime,
+              onGameChanged: (id) => ref
+                  .read(ticketsHistoryFiltersProvider.notifier)
+                  .setGame(id),
+              onDrawTimeChanged: (t) => ref
+                  .read(ticketsHistoryFiltersProvider.notifier)
+                  .setDrawTime(t),
+            ),
           ),
           Expanded(
             child: state.when(

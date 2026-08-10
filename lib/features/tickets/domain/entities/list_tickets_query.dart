@@ -7,6 +7,7 @@ class ListTicketsQuery extends Equatable {
   const ListTicketsQuery({
     this.salePointId,
     this.gameId,
+    this.drawTime,
     this.status,
     this.from,
     this.to,
@@ -16,6 +17,8 @@ class ListTicketsQuery extends Equatable {
 
   final String? salePointId;
   final String? gameId;
+  /// "HH:MM" wall clock Managua para filtrar por sorteo específico.
+  final String? drawTime;
   final TicketStatus? status;
   final DateTime? from;
   final DateTime? to;
@@ -25,6 +28,7 @@ class ListTicketsQuery extends Equatable {
   Map<String, dynamic> toQueryParameters() => {
         if (salePointId != null) 'salePointId': salePointId,
         if (gameId != null) 'gameId': gameId,
+        if (drawTime != null) 'drawTime': drawTime,
         if (status != null) 'status': status == TicketStatus.voided ? 'voided' : 'valid',
         if (from != null) 'from': BusinessTime.toBusinessIso(from!),
         if (to != null) 'to': BusinessTime.toBusinessIso(to!),
@@ -34,7 +38,7 @@ class ListTicketsQuery extends Equatable {
 
   @override
   List<Object?> get props =>
-      [salePointId, gameId, status, from, to, page, limit];
+      [salePointId, gameId, drawTime, status, from, to, page, limit];
 }
 
 class ListTicketsResult extends Equatable {
