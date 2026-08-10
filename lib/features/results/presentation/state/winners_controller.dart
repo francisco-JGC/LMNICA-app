@@ -1,10 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fpdart/fpdart.dart';
 
 import '../../../../core/di/injection.dart';
-import '../../../../core/errors/failures.dart';
 import '../../../sale_points/presentation/state/active_sale_point_controller.dart';
-import '../../../tickets/domain/repositories/tickets_repository.dart';
 import '../../domain/entities/winning_ticket.dart';
 import '../../domain/repositories/results_repository.dart';
 
@@ -37,7 +34,6 @@ final winnersFiltersProvider =
 
 class WinnersController extends AsyncNotifier<List<WinningTicket>> {
   late final _repository = getIt<ResultsRepository>();
-  late final _tickets = getIt<TicketsRepository>();
 
   @override
   Future<List<WinningTicket>> build() async {
@@ -50,28 +46,6 @@ class WinnersController extends AsyncNotifier<List<WinningTicket>> {
   Future<void> refresh() async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(_fetch);
-  }
-
-  Future<Either<Failure, Unit>> pay(String ticketId) async {
-    final result = await _tickets.payTicket(ticketId);
-    return result.fold<Either<Failure, Unit>>(
-      Left.new,
-      (updated) {
-        final current = state.value;
-        if (current != null) {
-          state = AsyncValue.data(
-            current.map<WinningTicket>((w) {
-              if (w.id != ticketId) return w;
-              return w.copyWith(
-                paidAt: updated.paidAt,
-                paidPrize: updated.paidPrize,
-              );
-            }).toList(),
-          );
-        }
-        return const Right(unit);
-      },
-    );
   }
 
   Future<List<WinningTicket>> _fetch() async {

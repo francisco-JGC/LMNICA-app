@@ -104,12 +104,9 @@ class _TotalsBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     var totalWon = 0;
-    var totalPaid = 0;
     for (final t in tickets) {
       totalWon += t.totalPrize;
-      if (t.isPaid) totalPaid += t.paidPrize;
     }
-    final pending = totalWon - totalPaid;
     final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -119,24 +116,10 @@ class _TotalsBar extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Row(
-          children: [
-            Expanded(
-              child: _TotalCell(
-                label: 'Pendiente',
-                value: pending,
-                color: Colors.orange.shade800,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _TotalCell(
-                label: 'Pagado',
-                value: totalPaid,
-                color: Colors.green.shade700,
-              ),
-            ),
-          ],
+        child: _TotalCell(
+          label: 'Total ganado por clientes',
+          value: totalWon,
+          color: Colors.orange.shade800,
         ),
       ),
     );
@@ -203,41 +186,22 @@ class _WinnerTile extends ConsumerWidget {
                     ),
                   ),
                 ),
-                if (ticket.isPaid)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.green.shade300),
-                    ),
-                    child: Text(
-                      'Pagado',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.green.shade800,
-                      ),
-                    ),
-                  )
-                else
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.orange.shade200),
-                    ),
-                    child: Text(
-                      kCurrencyFormat.format(ticket.totalPrize),
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: Colors.orange.shade800,
-                      ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Text(
+                    kCurrencyFormat.format(ticket.totalPrize),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Colors.orange.shade800,
                     ),
                   ),
+                ),
               ],
             ),
             const SizedBox(height: 4),
@@ -290,76 +254,11 @@ class _WinnerTile extends ConsumerWidget {
                   ],
                 ),
               ),
-            if (!ticket.isPaid) ...[
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  icon: const Icon(Icons.payments_outlined),
-                  label: Text(
-                      'Pagar ${kCurrencyFormat.format(ticket.totalPrize)}'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.green.shade700,
-                  ),
-                  onPressed: () => _confirmPay(context, ref, ticket),
-                ),
-              ),
-            ] else ...[
-              const SizedBox(height: 8),
-              Text(
-                'Pagado el ${DateFormat('dd/MM').format(ticket.paidAt!.toLocal())} '
-                '${formatTime12h(ticket.paidAt!)}',
-                style: TextStyle(
-                  color: Colors.green.shade800,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
           ],
         ),
       ),
     );
   }
-}
-
-Future<void> _confirmPay(
-  BuildContext context,
-  WidgetRef ref,
-  WinningTicket ticket,
-) async {
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text('Pagar #${ticket.folio}'),
-      content: Text(
-        '¿Confirmas el pago de ${kCurrencyFormat.format(ticket.totalPrize)}?',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('Pagar'),
-        ),
-      ],
-    ),
-  );
-  if (ok != true) return;
-  final either =
-      await ref.read(winnersControllerProvider.notifier).pay(ticket.id);
-  if (!context.mounted) return;
-  final messenger = ScaffoldMessenger.of(context);
-  either.match(
-    (failure) => messenger.showSnackBar(
-      SnackBar(content: Text('No se pudo pagar: ${failure.message}')),
-    ),
-    (_) => messenger.showSnackBar(
-      SnackBar(content: Text('Ticket #${ticket.folio} pagado')),
-    ),
-  );
 }
 
 class _EmptyView extends StatelessWidget {

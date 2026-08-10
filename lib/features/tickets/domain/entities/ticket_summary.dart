@@ -28,8 +28,7 @@ class TicketSummary extends Equatable {
     required this.createdAt,
     required this.voidedAt,
     required this.voidedReason,
-    required this.paidAt,
-    required this.paidPrize,
+    required this.wonPrize,
   });
 
   final String id;
@@ -46,11 +45,13 @@ class TicketSummary extends Equatable {
   final DateTime createdAt;
   final DateTime? voidedAt;
   final String? voidedReason;
-  final DateTime? paidAt;
-  final int paidPrize;
+  /// Premio ganado por el ticket (evaluado contra el `draw_result`).
+  /// 0 si no ganó o si el sorteo aún no se ejecutó. Reemplaza el
+  /// viejo `paidPrize` — el concepto de "pagado" fue eliminado.
+  final int wonPrize;
 
   bool get isVoided => status == TicketStatus.voided;
-  bool get isPaid => paidAt != null;
+  bool get isWinner => wonPrize > 0;
 
   bool canBeVoidedAt(DateTime now) {
     if (isVoided) return false;
@@ -75,7 +76,6 @@ class TicketSummary extends Equatable {
         createdAt,
         voidedAt,
         voidedReason,
-        paidAt,
-        paidPrize,
+        wonPrize,
       ];
 }

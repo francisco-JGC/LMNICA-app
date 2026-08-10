@@ -10,9 +10,8 @@ class TicketsByDrawItem extends Equatable {
     required this.drawAt,
     required this.ticketCount,
     required this.voidedCount,
-    required this.paidCount,
     required this.billed,
-    required this.paidPrize,
+    required this.wonPrize,
     required this.winningNumber,
   });
 
@@ -20,9 +19,10 @@ class TicketsByDrawItem extends Equatable {
   final DateTime drawAt;
   final int ticketCount;
   final int voidedCount;
-  final int paidCount;
   final int billed;
-  final int paidPrize;
+  /// Total ganado por tickets del sorteo (evaluado contra el
+  /// `draw_result`). 0 si el sorteo aún no tiene resultado registrado.
+  final int wonPrize;
 
   /// Winning number if the draw already has a registered result.
   final String? winningNumber;
@@ -33,9 +33,8 @@ class TicketsByDrawItem extends Equatable {
         drawAt,
         ticketCount,
         voidedCount,
-        paidCount,
         billed,
-        paidPrize,
+        wonPrize,
         winningNumber,
       ];
 }

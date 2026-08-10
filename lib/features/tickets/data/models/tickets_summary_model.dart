@@ -4,9 +4,8 @@ class TicketsSummaryModel extends TicketsSummary {
   const TicketsSummaryModel({
     required super.ticketCount,
     required super.voidedCount,
-    required super.paidCount,
     required super.billed,
-    required super.paidPrize,
+    required super.wonPrize,
     super.salary,
     super.paymentPercentage,
   });
@@ -15,9 +14,8 @@ class TicketsSummaryModel extends TicketsSummary {
     return TicketsSummaryModel(
       ticketCount: (json['ticketCount'] as num).toInt(),
       voidedCount: (json['voidedCount'] as num).toInt(),
-      paidCount: (json['paidCount'] as num).toInt(),
       billed: (json['billed'] as num).toInt(),
-      paidPrize: (json['paidPrize'] as num).toInt(),
+      wonPrize: (json['wonPrize'] as num).toInt(),
       salary: (json['salary'] as num?)?.toInt(),
       paymentPercentage: (json['paymentPercentage'] as num?)?.toInt(),
     );

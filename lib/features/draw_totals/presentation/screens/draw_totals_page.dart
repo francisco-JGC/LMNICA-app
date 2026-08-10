@@ -355,9 +355,9 @@ class _DrawCard extends StatelessWidget {
               Container(width: 1, height: 32, color: Colors.grey.shade200),
               Expanded(
                 child: _StatCell(
-                  label: 'Premios',
-                  value: kCurrencyFormat.format(item.paidPrize),
-                  color: item.paidPrize > 0
+                  label: 'Ganado',
+                  value: kCurrencyFormat.format(item.wonPrize),
+                  color: item.wonPrize > 0
                       ? Colors.red.shade700
                       : Colors.grey.shade500,
                 ),
@@ -538,29 +538,29 @@ class _Totals {
     required this.drawCount,
     required this.ticketCount,
     required this.billed,
-    required this.paidPrize,
+    required this.wonPrize,
   });
 
   final int drawCount;
   final int ticketCount;
   final int billed;
-  final int paidPrize;
+  final int wonPrize;
 }
 
 _Totals _aggregate(List<TicketsByDrawItem> items) {
   var tickets = 0;
   var billed = 0;
-  var paid = 0;
+  var won = 0;
   for (final i in items) {
     tickets += i.ticketCount;
     billed += i.billed;
-    paid += i.paidPrize;
+    won += i.wonPrize;
   }
   return _Totals(
     drawCount: items.length,
     ticketCount: tickets,
     billed: billed,
-    paidPrize: paid,
+    wonPrize: won,
   );
 }
 

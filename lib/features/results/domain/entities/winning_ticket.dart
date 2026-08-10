@@ -33,8 +33,6 @@ class WinningTicket extends Equatable {
     required this.drawAt,
     required this.totalPrize,
     required this.lines,
-    required this.paidAt,
-    required this.paidPrize,
   });
 
   final String id;
@@ -44,22 +42,6 @@ class WinningTicket extends Equatable {
   final DateTime drawAt;
   final int totalPrize;
   final List<WinningTicketLine> lines;
-  final DateTime? paidAt;
-  final int paidPrize;
-
-  bool get isPaid => paidAt != null;
-
-  WinningTicket copyWith({DateTime? paidAt, int? paidPrize}) => WinningTicket(
-        id: id,
-        folio: folio,
-        gameId: gameId,
-        client: client,
-        drawAt: drawAt,
-        totalPrize: totalPrize,
-        lines: lines,
-        paidAt: paidAt ?? this.paidAt,
-        paidPrize: paidPrize ?? this.paidPrize,
-      );
 
   @override
   List<Object?> get props => [
@@ -70,7 +52,5 @@ class WinningTicket extends Equatable {
         drawAt,
         totalPrize,
         lines,
-        paidAt,
-        paidPrize,
       ];
 }

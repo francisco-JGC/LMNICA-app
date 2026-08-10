@@ -8,9 +8,8 @@ class TicketsSummary extends Equatable {
   const TicketsSummary({
     required this.ticketCount,
     required this.voidedCount,
-    required this.paidCount,
     required this.billed,
-    required this.paidPrize,
+    required this.wonPrize,
     this.salary,
     this.paymentPercentage,
   });
@@ -18,16 +17,17 @@ class TicketsSummary extends Equatable {
   static const empty = TicketsSummary(
     ticketCount: 0,
     voidedCount: 0,
-    paidCount: 0,
     billed: 0,
-    paidPrize: 0,
+    wonPrize: 0,
   );
 
   final int ticketCount;
   final int voidedCount;
-  final int paidCount;
   final int billed;
-  final int paidPrize;
+  /// Total ganado por los tickets del rango, evaluado contra los
+  /// `draw_results`. Reemplaza el viejo `paidPrize` — el concepto
+  /// de "pagado" fue eliminado.
+  final int wonPrize;
 
   /// Seller commission (`billed * paymentPercentage / 100`). Non-null only
   /// when the query was implicitly or explicitly scoped to a seller AND that
@@ -41,9 +41,8 @@ class TicketsSummary extends Equatable {
   List<Object?> get props => [
         ticketCount,
         voidedCount,
-        paidCount,
         billed,
-        paidPrize,
+        wonPrize,
         salary,
         paymentPercentage,
       ];

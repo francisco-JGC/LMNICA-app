@@ -11,8 +11,6 @@ class TicketEvaluationModel extends TicketEvaluation {
     required super.isWinner,
     required super.hasPendingDraw,
     required super.totalPrize,
-    required super.paidAt,
-    required super.paidPrize,
     required super.lines,
   });
 
@@ -30,10 +28,6 @@ class TicketEvaluationModel extends TicketEvaluation {
       isWinner: json['isWinner'] as bool,
       hasPendingDraw: json['hasPendingDraw'] as bool,
       totalPrize: (json['totalPrize'] as num).toInt(),
-      paidAt: json['paidAt'] != null
-          ? DateTime.parse(json['paidAt'] as String)
-          : null,
-      paidPrize: (json['paidPrize'] as num?)?.toInt() ?? 0,
       lines: rawLines,
     );
   }

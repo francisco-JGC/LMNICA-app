@@ -6,9 +6,8 @@ class TicketsByDrawItemModel extends TicketsByDrawItem {
     required super.drawAt,
     required super.ticketCount,
     required super.voidedCount,
-    required super.paidCount,
     required super.billed,
-    required super.paidPrize,
+    required super.wonPrize,
     required super.winningNumber,
   });
 
@@ -18,9 +17,8 @@ class TicketsByDrawItemModel extends TicketsByDrawItem {
       drawAt: DateTime.parse(json['drawAt'] as String),
       ticketCount: (json['ticketCount'] as num).toInt(),
       voidedCount: (json['voidedCount'] as num).toInt(),
-      paidCount: (json['paidCount'] as num).toInt(),
       billed: (json['billed'] as num).toInt(),
-      paidPrize: (json['paidPrize'] as num).toInt(),
+      wonPrize: (json['wonPrize'] as num).toInt(),
       winningNumber: json['winningNumber'] as String?,
     );
   }

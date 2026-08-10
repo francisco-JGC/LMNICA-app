@@ -9,8 +9,6 @@ import '../../../../core/utils/currency.dart';
 import '../../../../core/utils/time_format.dart';
 import '../../../games/domain/entities/game.dart';
 import '../../../games/presentation/state/games_controller.dart';
-import '../../../tickets/domain/repositories/tickets_repository.dart';
-import '../../data/models/ticket_evaluation_model.dart';
 import '../../domain/entities/ticket_evaluation.dart';
 import '../../domain/repositories/results_repository.dart';
 
@@ -40,7 +38,6 @@ class VerifyTicketPage extends ConsumerStatefulWidget {
 class _VerifyTicketPageState extends ConsumerState<VerifyTicketPage> {
   final _controller = MobileScannerController();
   bool _busy = false;
-  bool _paying = false;
   String? _error;
   TicketEvaluation? _evaluation;
 
@@ -48,49 +45,6 @@ class _VerifyTicketPageState extends ConsumerState<VerifyTicketPage> {
   void dispose() {
     _controller.dispose();
     super.dispose();
-  }
-
-  Future<void> _payCurrentTicket() async {
-    final current = _evaluation;
-    if (current == null || _paying) return;
-    setState(() {
-      _paying = true;
-      _error = null;
-    });
-    final result = await getIt<TicketsRepository>().payTicket(current.ticketId);
-    if (!mounted) return;
-    result.match(
-      (failure) {
-        setState(() {
-          _paying = false;
-          _error = failure.message;
-        });
-      },
-      (ticket) {
-        setState(() {
-          _paying = false;
-          _evaluation = TicketEvaluationModel(
-            ticketId: current.ticketId,
-            folio: current.folio,
-            gameId: current.gameId,
-            drawAt: current.drawAt,
-            status: current.status,
-            isWinner: current.isWinner,
-            hasPendingDraw: current.hasPendingDraw,
-            totalPrize: current.totalPrize,
-            paidAt: ticket.paidAt ?? DateTime.now(),
-            paidPrize: ticket.paidPrize,
-            lines: current.lines,
-          );
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Premio pagado'),
-            backgroundColor: Color(0xFF15803D),
-          ),
-        );
-      },
-    );
   }
 
   Future<void> _onDetect(BarcodeCapture capture) async {
@@ -163,9 +117,6 @@ class _VerifyTicketPageState extends ConsumerState<VerifyTicketPage> {
           ? _ResultView(
               evaluation: _evaluation!,
               onScanAnother: _reset,
-              onPay: _payCurrentTicket,
-              isPaying: _paying,
-              payError: _error,
             )
           : Stack(
               children: [
@@ -201,16 +152,10 @@ class _ResultView extends ConsumerWidget {
   const _ResultView({
     required this.evaluation,
     required this.onScanAnother,
-    required this.onPay,
-    required this.isPaying,
-    required this.payError,
   });
 
   final TicketEvaluation evaluation;
   final VoidCallback onScanAnother;
-  final Future<void> Function() onPay;
-  final bool isPaying;
-  final String? payError;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -335,13 +280,6 @@ class _ResultView extends ConsumerWidget {
               ),
             ),
           const SizedBox(height: 20),
-          _PayControls(
-            evaluation: evaluation,
-            isPaying: isPaying,
-            payError: payError,
-            onPay: onPay,
-          ),
-          const SizedBox(height: 12),
           FilledButton.icon(
             icon: const Icon(Icons.qr_code_scanner),
             label: const Text('Escanear otro boleto'),
@@ -376,115 +314,6 @@ class _ResultView extends ConsumerWidget {
     if (e.isWinner) return Icons.emoji_events;
     if (e.hasPendingDraw) return Icons.hourglass_top;
     return Icons.info_outline;
-  }
-}
-
-class _PayControls extends StatelessWidget {
-  const _PayControls({
-    required this.evaluation,
-    required this.isPaying,
-    required this.payError,
-    required this.onPay,
-  });
-
-  final TicketEvaluation evaluation;
-  final bool isPaying;
-  final String? payError;
-  final Future<void> Function() onPay;
-
-  @override
-  Widget build(BuildContext context) {
-    // Already paid — nice green badge with the timestamp.
-    if (evaluation.isPaid) {
-      final fmt = DateFormat('dd/MM/yyyy');
-      final when = evaluation.paidAt!;
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.green.shade50,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.green.shade200),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.verified_rounded, color: Colors.green.shade700),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Premio ya entregado',
-                    style: TextStyle(
-                      color: Colors.green.shade800,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  Text(
-                    '${fmt.format(when.toLocal())} · ${formatTime12h(when)}',
-                    style: TextStyle(
-                      color: Colors.green.shade900,
-                      fontSize: 12.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Not eligible (not a winner, voided or draw pending): nothing to do.
-    if (!evaluation.canPay) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        FilledButton.icon(
-          onPressed: isPaying ? null : onPay,
-          style: FilledButton.styleFrom(
-            backgroundColor: Colors.green.shade700,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-          ),
-          icon: isPaying
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Icon(Icons.payments),
-          label: Text(
-            isPaying
-                ? 'Pagando…'
-                : 'Pagar premio · ${kCurrencyFormat.format(evaluation.totalPrize)}',
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        if (payError != null) ...[
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.red.shade50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.red.shade200),
-            ),
-            child: Text(
-              payError!,
-              style: TextStyle(color: Colors.red.shade900, fontSize: 13),
-            ),
-          ),
-        ],
-      ],
-    );
   }
 }
 

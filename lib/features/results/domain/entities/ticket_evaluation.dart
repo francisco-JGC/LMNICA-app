@@ -12,8 +12,6 @@ class TicketEvaluation extends Equatable {
     required this.isWinner,
     required this.hasPendingDraw,
     required this.totalPrize,
-    required this.paidAt,
-    required this.paidPrize,
     required this.lines,
   });
 
@@ -25,17 +23,9 @@ class TicketEvaluation extends Equatable {
   final bool isWinner;
   final bool hasPendingDraw;
   final int totalPrize;
-
-  /// When the prize was collected. Null while it's still pending.
-  final DateTime? paidAt;
-  final int paidPrize;
   final List<WinningTicketLine> lines;
 
-  bool get isPaid => paidAt != null;
   bool get isVoided => status == 'voided';
-
-  /// True when the seller should still hand out the prize on this ticket.
-  bool get canPay => isWinner && !isPaid && !isVoided;
 
   @override
   List<Object?> get props => [
@@ -47,8 +37,6 @@ class TicketEvaluation extends Equatable {
         isWinner,
         hasPendingDraw,
         totalPrize,
-        paidAt,
-        paidPrize,
         lines,
       ];
 }

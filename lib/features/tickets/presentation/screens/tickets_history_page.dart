@@ -106,10 +106,10 @@ class _TotalsBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     var billed = 0;
-    var paid = 0;
+    var won = 0;
     for (final t in tickets) {
       if (!t.isVoided) billed += t.total;
-      if (t.isPaid) paid += t.paidPrize;
+      won += t.wonPrize;
     }
     final theme = Theme.of(context);
     return Container(
@@ -134,9 +134,9 @@ class _TotalsBar extends StatelessWidget {
             const SizedBox(width: 16),
             Expanded(
               child: _TotalCell(
-                label: 'Pagado',
-                value: paid,
-                color: Colors.green.shade700,
+                label: 'Ganado',
+                value: won,
+                color: Colors.red.shade700,
               ),
             ),
           ],
@@ -262,12 +262,12 @@ class _TicketTile extends ConsumerWidget {
                   ),
                 ],
               ),
-              if (ticket.isPaid) ...[
+              if (ticket.isWinner) ...[
                 const SizedBox(height: 4),
                 Text(
-                  'Pagado: ${kCurrencyFormat.format(ticket.paidPrize)}',
+                  'Ganado: ${kCurrencyFormat.format(ticket.wonPrize)}',
                   style: TextStyle(
-                    color: Colors.green.shade800,
+                    color: Colors.red.shade800,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -508,12 +508,12 @@ class _StatusChip extends StatelessWidget {
         fg: Colors.red.shade700,
       );
     }
-    if (ticket.isPaid) {
+    if (ticket.isWinner) {
       return _Chip(
-        text: 'Pagado',
-        bg: Colors.green.shade100,
-        border: Colors.green.shade300,
-        fg: Colors.green.shade800,
+        text: 'Ganador',
+        bg: Colors.amber.shade50,
+        border: Colors.amber.shade300,
+        fg: Colors.amber.shade800,
       );
     }
     return _Chip(
