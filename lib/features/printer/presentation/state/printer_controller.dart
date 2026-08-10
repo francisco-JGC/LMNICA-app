@@ -19,9 +19,12 @@ enum _PermissionOutcome { granted, denied, permanentlyDenied }
 // conectar si volvió a estar disponible.
 
 /// Cada cuánto reintenta autoReconnect cuando la impresora está
-/// desconectada. 8s es un tradeoff sensato: el vendedor ve la reconexión
-/// dentro de ~10-15s desde que prende BT, sin gastarle batería.
-const _kReconnectPollInterval = Duration(seconds: 8);
+/// desconectada. 4s es agresivo pero necesario: el vendedor típico
+/// prende la impresora DESPUÉS de haber abierto la app, y con 8s la
+/// espera se sentía eterna. El datasource ya tiene timeouts para que
+/// un intento fallido libere el guard rápido (`_isReconnecting`) y el
+/// siguiente tick pueda pegarle en cuanto la impresora vuelva.
+const _kReconnectPollInterval = Duration(seconds: 4);
 
 class PrinterController extends Notifier<PrinterState> {
   late final _repository = getIt<PrinterRepository>();

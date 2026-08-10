@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
@@ -34,18 +35,33 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
         .toList();
   }
 
+  // Timeouts para los llamados nativos del plugin. Sin esto, `connect()` a
+  // una impresora apagada puede quedar colgado indefinidamente en algunos
+  // devices Android, y el `_isReconnecting` guard del controller impide
+  // que el timer intente de nuevo. Con timeout, forzamos el fallo rápido
+  // y liberamos el ciclo de reconexión.
+  static const _kConnectTimeout = Duration(seconds: 10);
+  static const _kDisconnectTimeout = Duration(seconds: 3);
+
   @override
   Future<void> connect(String address) async {
     // Force disconnect first — the plugin can hold a stale handle that
     // makes a fresh connect() return false immediately.
     try {
-      await PrintBluetoothThermal.disconnect;
+      await PrintBluetoothThermal.disconnect.timeout(_kDisconnectTimeout);
     } catch (_) {
-      // Ignore: no active connection.
+      // Ignore: no active connection or disconnect hung. Continuamos igual.
     }
     await Future<void>.delayed(const Duration(milliseconds: 300));
-    final ok =
-        await PrintBluetoothThermal.connect(macPrinterAddress: address);
+    final bool ok;
+    try {
+      ok = await PrintBluetoothThermal.connect(macPrinterAddress: address)
+          .timeout(_kConnectTimeout);
+    } on TimeoutException {
+      throw Exception(
+        'La conexión a la impresora tardó demasiado (¿apagada o fuera de rango?)',
+      );
+    }
     if (!ok) {
       throw Exception('No fue posible conectar a la impresora');
     }
@@ -53,7 +69,11 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
 
   @override
   Future<void> disconnect() async {
-    await PrintBluetoothThermal.disconnect;
+    try {
+      await PrintBluetoothThermal.disconnect.timeout(_kDisconnectTimeout);
+    } on TimeoutException {
+      // Silent: el plugin colgó. Nada más que podamos hacer.
+    }
   }
 
   @override
