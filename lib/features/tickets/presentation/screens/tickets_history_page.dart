@@ -359,7 +359,6 @@ class _TicketMenu extends ConsumerWidget {
         final payload = _buildPayload(
           detail: detail,
           seller: ref.read(currentUserProvider)?.name,
-          footer: '(Reimpresion)',
         );
         await ref.read(printerControllerProvider.notifier).printTicket(payload);
         if (!context.mounted) return;
@@ -392,7 +391,6 @@ class _TicketMenu extends ConsumerWidget {
         final payload = _buildPayload(
           detail: detail,
           seller: ref.read(currentUserProvider)?.name,
-          footer: '(Reenvio)',
         );
         if (!context.mounted) return;
         final shared = await const TicketImageShareService()
@@ -407,10 +405,12 @@ class _TicketMenu extends ConsumerWidget {
     );
   }
 
+  // Los reprints y reenvíos generan el ticket idéntico al original — sin
+  // marca de "reimpresión" ni "reenvío" — para que el cliente lo perciba
+  // como el mismo boleto.
   printer.TicketPayload _buildPayload({
     required TicketDetail detail,
     required String? seller,
-    required String footer,
   }) {
     final summary = detail.summary;
     return printer.TicketPayload(
@@ -431,7 +431,6 @@ class _TicketMenu extends ConsumerWidget {
       drawAt: summary.drawAt,
       seller: seller,
       client: summary.client,
-      footer: footer,
     );
   }
 }
