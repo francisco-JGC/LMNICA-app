@@ -49,7 +49,12 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  remove_alpha_ios: true
+  # `remove_alpha_ios` desactivado a propósito: el icono usa transparencia
+  # en las esquinas y removerla rellena con blanco (feo con el marco
+  # dorado del diseño). Como esta app se distribuye APK directo y no por
+  # App Store, no hay riesgo de rechazo por alpha en el binario iOS.
+  # iOS aplica su propio corner radius al render, así que las esquinas
+  # transparentes nunca se ven al usuario.
   image_path: "assets/icon/app_icon.png"
   min_sdk_android: 21
 
