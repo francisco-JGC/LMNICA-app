@@ -164,6 +164,12 @@ class _ScanTicketPageState extends ConsumerState<ScanTicketPage>
 
   int _loadIntoCart(TicketDetail detail) {
     final client = detail.summary.client;
+    // ANTES de cargar los números escaneados, limpiamos el cart. Si no
+    // limpiamos, el `_merge` interno del cart SUMA los montos cuando
+    // encuentra el mismo número → doble contabilización. También evita
+    // que queden números viejos que no son del boleto escaneado
+    // (síntoma "aparecieron números que no compré").
+    _clearCurrentCart();
     switch (widget.game.type) {
       case GameType.regular:
         return _loadRegular(detail, client);
@@ -175,6 +181,28 @@ class _ScanTicketPageState extends ConsumerState<ScanTicketPage>
         return _loadDates(detail, client);
       case GameType.multiSorteo:
         return 0;
+    }
+  }
+
+  void _clearCurrentCart() {
+    switch (widget.game.type) {
+      case GameType.regular:
+        ref.read(cartControllerProvider(widget.game.id).notifier).clear();
+      case GameType.threeDigit:
+        ref
+            .read(gana3CartControllerProvider(widget.game.id).notifier)
+            .clear();
+      case GameType.fourDigit:
+        ref
+            .read(comboCartControllerProvider(widget.game.id).notifier)
+            .clear();
+      case GameType.date:
+        ref
+            .read(dateCartControllerProvider(widget.game.id).notifier)
+            .clear();
+      case GameType.multiSorteo:
+        // No aplica — este tipo no acepta rescanning (ver `_onDetect`).
+        break;
     }
   }
 

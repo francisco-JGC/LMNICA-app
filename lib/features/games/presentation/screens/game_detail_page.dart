@@ -18,6 +18,7 @@ import '../../../sales/presentation/state/combo_cart_controller.dart';
 import '../../../sales/presentation/state/combo_cart_state.dart';
 import '../../../sales/presentation/state/date_cart_controller.dart';
 import '../../../sales/presentation/state/date_cart_state.dart';
+import '../../../sales/presentation/state/form_reset_provider.dart';
 import '../../../sales/presentation/state/gana3_cart_controller.dart';
 import '../../../sales/presentation/state/gana3_cart_state.dart';
 import '../../../sales/presentation/widgets/bet_tile.dart';
@@ -110,6 +111,7 @@ class _RegularGameView extends ConsumerWidget {
     final controller = ref.read(cartControllerProvider(game.id).notifier);
     final printerState = ref.watch(printerControllerProvider);
     final submitting = ref.watch(ticketSubmittingProvider);
+    final formResetKey = ref.watch(formResetProvider(game.id));
 
     return Scaffold(
       appBar: AppBar(
@@ -142,7 +144,10 @@ class _RegularGameView extends ConsumerWidget {
       body: Column(
         children: [
           SaleLimitsBannerAuto(gameId: game.id),
-          QuickBetForm(onSubmit: controller.addSingle),
+          QuickBetForm(
+            key: ValueKey('quick-bet-form-$formResetKey'),
+            onSubmit: controller.addSingle,
+          ),
           Expanded(
             child: cart.isEmpty
                 ? const _EmptyView()
@@ -219,6 +224,7 @@ class _DateGameView extends ConsumerWidget {
         ref.read(dateCartControllerProvider(game.id).notifier);
     final printerState = ref.watch(printerControllerProvider);
     final submitting = ref.watch(ticketSubmittingProvider);
+    final formResetKey = ref.watch(formResetProvider(game.id));
 
     return Scaffold(
       appBar: AppBar(
@@ -261,7 +267,10 @@ class _DateGameView extends ConsumerWidget {
       body: Column(
         children: [
           SaleLimitsBannerAuto(gameId: game.id),
-          QuickDateBetForm(onSubmit: controller.addSingle),
+          QuickDateBetForm(
+            key: ValueKey('quick-date-bet-form-$formResetKey'),
+            onSubmit: controller.addSingle,
+          ),
           Expanded(
             child: cart.isEmpty
                 ? const _EmptyView(
@@ -392,13 +401,17 @@ class _MultiSorteoGameViewState
   }
 
   Widget _cartBodyFor(Game sub) {
+    final formResetKey = ref.watch(formResetProvider(sub.id));
     switch (sub.type) {
       case GameType.regular:
         final cart = ref.watch(cartControllerProvider(sub.id));
         final controller = ref.read(cartControllerProvider(sub.id).notifier);
         return Expanded(
           child: _scrollableCart(
-            form: QuickBetForm(onSubmit: controller.addSingle),
+            form: QuickBetForm(
+              key: ValueKey('quick-bet-form-$formResetKey'),
+              onSubmit: controller.addSingle,
+            ),
             isEmpty: cart.isEmpty,
             itemCount: cart.bets.length,
             itemBuilder: (i) => BetTile(
@@ -413,7 +426,10 @@ class _MultiSorteoGameViewState
             ref.read(dateCartControllerProvider(sub.id).notifier);
         return Expanded(
           child: _scrollableCart(
-            form: QuickDateBetForm(onSubmit: controller.addSingle),
+            form: QuickDateBetForm(
+              key: ValueKey('quick-date-bet-form-$formResetKey'),
+              onSubmit: controller.addSingle,
+            ),
             isEmpty: cart.isEmpty,
             emptyIcon: Icons.calendar_month_outlined,
             emptyLabel: 'Aún no hay fechas registradas',
@@ -430,7 +446,10 @@ class _MultiSorteoGameViewState
             ref.read(gana3CartControllerProvider(sub.id).notifier);
         return Expanded(
           child: _scrollableCart(
-            form: QuickGana3BetForm(onSubmit: controller.addSingle),
+            form: QuickGana3BetForm(
+              key: ValueKey('quick-gana3-bet-form-$formResetKey'),
+              onSubmit: controller.addSingle,
+            ),
             isEmpty: cart.isEmpty,
             itemCount: cart.bets.length,
             itemBuilder: (i) => Gana3BetTile(
@@ -445,7 +464,10 @@ class _MultiSorteoGameViewState
             ref.read(comboCartControllerProvider(sub.id).notifier);
         return Expanded(
           child: _scrollableCart(
-            form: QuickComboBetForm(onSubmit: controller.addSingle),
+            form: QuickComboBetForm(
+              key: ValueKey('quick-combo-bet-form-$formResetKey'),
+              onSubmit: controller.addSingle,
+            ),
             isEmpty: cart.isEmpty,
             itemCount: cart.bets.length,
             itemBuilder: (i) => ComboBetTile(
@@ -544,6 +566,9 @@ class _MultiSorteoGameViewState
       }
       if (!mounted) return;
       _clearCart(sub);
+      // Fuerza a los forms del subgame a recrearse desde cero — sino el
+      // TextField "Cliente" mantiene el nombre para la siguiente venta.
+      ref.read(formResetProvider(sub.id).notifier).bump();
       _selectedDrawAts.clear();
       ref.invalidate(availableDrawsProvider(sub.id));
       messenger.showSnackBar(SnackBar(
@@ -915,6 +940,7 @@ class _ComboGameView extends ConsumerWidget {
         ref.read(comboCartControllerProvider(game.id).notifier);
     final printerState = ref.watch(printerControllerProvider);
     final submitting = ref.watch(ticketSubmittingProvider);
+    final formResetKey = ref.watch(formResetProvider(game.id));
 
     return Scaffold(
       appBar: AppBar(
@@ -971,7 +997,10 @@ class _ComboGameView extends ConsumerWidget {
       body: Column(
         children: [
           SaleLimitsBannerAuto(gameId: game.id),
-          QuickComboBetForm(onSubmit: controller.addSingle),
+          QuickComboBetForm(
+            key: ValueKey('quick-combo-bet-form-$formResetKey'),
+            onSubmit: controller.addSingle,
+          ),
           Expanded(
             child: cart.isEmpty
                 ? const _EmptyView(
@@ -1013,6 +1042,7 @@ class _Gana3GameView extends ConsumerWidget {
         ref.read(gana3CartControllerProvider(game.id).notifier);
     final printerState = ref.watch(printerControllerProvider);
     final submitting = ref.watch(ticketSubmittingProvider);
+    final formResetKey = ref.watch(formResetProvider(game.id));
 
     return Scaffold(
       appBar: AppBar(
@@ -1074,7 +1104,10 @@ class _Gana3GameView extends ConsumerWidget {
       body: Column(
         children: [
           SaleLimitsBannerAuto(gameId: game.id),
-          QuickGana3BetForm(onSubmit: controller.addSingle),
+          QuickGana3BetForm(
+            key: ValueKey('quick-gana3-bet-form-$formResetKey'),
+            onSubmit: controller.addSingle,
+          ),
           Expanded(
             child: cart.isEmpty
                 ? const _EmptyView(
@@ -1168,8 +1201,13 @@ Future<void> _printRegular(
       seller: ref.read(currentUserProvider)?.name,
       client: cart.client,
     ),
-    onSuccess: () =>
-        ref.read(cartControllerProvider(game.id).notifier).clear(),
+    onSuccess: () {
+      ref.read(cartControllerProvider(game.id).notifier).clear();
+      // Fuerza a los forms a recrearse desde cero → limpia el
+      // `TextEditingController` local del campo "Cliente" que sino
+      // conserva el nombre para la siguiente venta.
+      ref.read(formResetProvider(game.id).notifier).bump();
+    },
   );
 }
 
@@ -1213,8 +1251,10 @@ Future<void> _printCombo(
       seller: ref.read(currentUserProvider)?.name,
       client: cart.client,
     ),
-    onSuccess: () =>
-        ref.read(comboCartControllerProvider(game.id).notifier).clear(),
+    onSuccess: () {
+      ref.read(comboCartControllerProvider(game.id).notifier).clear();
+      ref.read(formResetProvider(game.id).notifier).bump();
+    },
   );
 }
 
@@ -1258,8 +1298,10 @@ Future<void> _printGana3(
       seller: ref.read(currentUserProvider)?.name,
       client: cart.client,
     ),
-    onSuccess: () =>
-        ref.read(gana3CartControllerProvider(game.id).notifier).clear(),
+    onSuccess: () {
+      ref.read(gana3CartControllerProvider(game.id).notifier).clear();
+      ref.read(formResetProvider(game.id).notifier).bump();
+    },
   );
 }
 
@@ -1303,8 +1345,10 @@ Future<void> _printDates(
       seller: ref.read(currentUserProvider)?.name,
       client: cart.client,
     ),
-    onSuccess: () =>
-        ref.read(dateCartControllerProvider(game.id).notifier).clear(),
+    onSuccess: () {
+      ref.read(dateCartControllerProvider(game.id).notifier).clear();
+      ref.read(formResetProvider(game.id).notifier).bump();
+    },
   );
 }
 
