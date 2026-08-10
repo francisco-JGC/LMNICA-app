@@ -34,12 +34,14 @@ class PrinterController extends Notifier<PrinterState> {
 
   @override
   PrinterState build() {
-    // Timer siempre vivo mientras el provider exista. Cuando está conectado
-    // cada tick es un no-op de memoria (early return por `state.isConnected`).
-    // Cuando está desconectado, dispara autoReconnect que sí mira BT y last-
-    // connected. Sin manual start/stop — el estado del `state` es el gate.
+    // Timer siempre corre autoReconnect — dentro decide qué hacer según el
+    // estado real del plugin. La diferencia con el diseño anterior es que
+    // no confiamos en `state.isConnected` como gate: si el estado dice
+    // "conectado" pero el plugin dice que no (típico después de logout,
+    // background largo, o BT toggle), autoReconnect detecta el desajuste
+    // y reintenta. Antes ese caso quedaba varado hasta que el usuario
+    // apretaba imprimir y fallaba.
     _reconnectTimer = Timer.periodic(_kReconnectPollInterval, (_) {
-      if (state.isConnected) return;
       autoReconnect();
     });
     ref.onDispose(() {
@@ -54,8 +56,40 @@ class PrinterController extends Notifier<PrinterState> {
     _isReconnecting = true;
     try {
       final connectedResult = await _repository.isConnected();
-      final alreadyConnected = connectedResult.getOrElse((_) => false);
-      if (alreadyConnected) return;
+      final pluginConnected = connectedResult.getOrElse((_) => false);
+      final stateConnected = state.connectedDevice != null;
+
+      // Caso feliz: ambos coinciden en conectado → nada que hacer.
+      if (pluginConnected && stateConnected) return;
+
+      // Plugin conectado pero el state no lo sabe (típico después de
+      // rebuild o app resume). Adoptamos el last-connected para que la
+      // UI refleje la realidad. Sincronización en dirección segura.
+      if (pluginConnected && !stateConnected) {
+        final lastResult = await _repository.getLastConnected();
+        final last = lastResult.getOrElse((_) => null);
+        if (last != null) {
+          state = state.copyWith(connectedDevice: last);
+        }
+        return;
+      }
+
+      // Plugin dice desconectado. NO forzamos disconnect en el state
+      // basados solo en esto: `connectionStatus` en algunos SPP baratos
+      // da false-negatives (dice "no conectado" cuando el socket sigue
+      // vivo). Confiar en ese signal y limpiar el state cada 8s haría
+      // que vendedores con BT flaky se coman ciclos de reconexión que
+      // rompen una impresora que estaba andando bien.
+      //
+      // La recuperación real cuando el state está stale ocurre en el
+      // camino `printTicket` → falla al escribir → `clearConnectedDevice`
+      // → `autoReconnect` inmediato. Ese es el disparador confiable.
+      //
+      // Acá solo intentamos reconectar cuando el state YA sabe que
+      // estamos desconectados (state.connectedDevice == null), que es
+      // el caso post-arranque de app, post-fallo de impresión, o post-
+      // pérdida explícita de conexión.
+      if (stateConnected) return;
 
       final btResult = await _repository.isBluetoothEnabled();
       if (!btResult.getOrElse((_) => false)) return;
@@ -183,13 +217,17 @@ class PrinterController extends Notifier<PrinterState> {
     result.match(
       // Un fallo en imprimir suele significar socket muerto (impresora
       // apagada, sin batería, fuera de rango). Limpiamos `connectedDevice`
-      // para que el polling adaptativo se despierte y reintente conectar
-      // hasta que la impresora vuelva.
-      (failure) => state = state.copyWith(
-        isPrinting: false,
-        errorMessage: failure.message,
-        clearConnectedDevice: true,
-      ),
+      // y disparamos un autoReconnect inmediato — sin esperar el próximo
+      // tick del timer (hasta 8s) — para que el vendedor tenga la
+      // impresora lista lo antes posible cuando vuelva a intentar.
+      (failure) {
+        state = state.copyWith(
+          isPrinting: false,
+          errorMessage: failure.message,
+          clearConnectedDevice: true,
+        );
+        Future.microtask(autoReconnect);
+      },
       (_) => state = state.copyWith(isPrinting: false),
     );
   }
@@ -199,11 +237,14 @@ class PrinterController extends Notifier<PrinterState> {
     final result = await _repository.printTicket(payload);
     result.match(
       // Ver comentario en printTest — misma lógica.
-      (failure) => state = state.copyWith(
-        isPrinting: false,
-        errorMessage: failure.message,
-        clearConnectedDevice: true,
-      ),
+      (failure) {
+        state = state.copyWith(
+          isPrinting: false,
+          errorMessage: failure.message,
+          clearConnectedDevice: true,
+        );
+        Future.microtask(autoReconnect);
+      },
       (_) => state = state.copyWith(isPrinting: false),
     );
   }
