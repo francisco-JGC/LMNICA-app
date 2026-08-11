@@ -17,6 +17,10 @@ abstract interface class TicketsRemoteDatasource {
   Future<({List<TicketSummaryModel> items, int page, int limit, int total})>
       list(ListTicketsQuery query);
   Future<TicketDetailModel> findById(String id);
+  /// Lookup para el flujo de escaneo — sin restricción de dueño, permite
+  /// a un vendedor escanear boletos que no son suyos (p. ej. de un
+  /// compañero de sucursal o de días pasados).
+  Future<TicketDetailModel> findByIdForScan(String id);
   Future<TicketSummaryModel> voidTicket({
     required String id,
     required String reason,
@@ -77,6 +81,19 @@ class TicketsRemoteDatasourceImpl implements TicketsRemoteDatasource {
     try {
       final response =
           await client.instance.get<Map<String, dynamic>>('/tickets/$id');
+      final data = response.data;
+      if (data == null) throw ServerException('Empty response from server');
+      return TicketDetailModel.fromJson(data);
+    } on DioException catch (e) {
+      throw _mapError(e);
+    }
+  }
+
+  @override
+  Future<TicketDetailModel> findByIdForScan(String id) async {
+    try {
+      final response = await client.instance
+          .get<Map<String, dynamic>>('/tickets/$id/scan');
       final data = response.data;
       if (data == null) throw ServerException('Empty response from server');
       return TicketDetailModel.fromJson(data);

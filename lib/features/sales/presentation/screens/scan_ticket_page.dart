@@ -106,7 +106,7 @@ class _ScanTicketPageState extends ConsumerState<ScanTicketPage>
       _error = null;
     });
 
-    final either = await getIt<TicketsRepository>().findById(id);
+    final either = await getIt<TicketsRepository>().findByIdForScan(id);
     if (!mounted) return;
 
     await either.match(

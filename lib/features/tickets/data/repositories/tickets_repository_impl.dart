@@ -45,6 +45,11 @@ class TicketsRepositoryImpl implements TicketsRepository {
   }
 
   @override
+  Future<Either<Failure, TicketDetail>> findByIdForScan(String id) {
+    return _guard(() => remote.findByIdForScan(id));
+  }
+
+  @override
   Future<Either<Failure, TicketSummary>> voidTicket({
     required String id,
     required String reason,

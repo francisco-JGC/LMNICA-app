@@ -13,6 +13,8 @@ abstract interface class TicketsRepository {
   Future<Either<Failure, TicketReceipt>> create(CreateTicketRequest request);
   Future<Either<Failure, ListTicketsResult>> list(ListTicketsQuery query);
   Future<Either<Failure, TicketDetail>> findById(String id);
+  /// Lookup específico para escaneo de QR — sin restricción de dueño.
+  Future<Either<Failure, TicketDetail>> findByIdForScan(String id);
   Future<Either<Failure, TicketSummary>> voidTicket({
     required String id,
     required String reason,
