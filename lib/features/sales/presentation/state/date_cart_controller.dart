@@ -68,6 +68,13 @@ class DateCartController extends Notifier<DateCartState> {
     return result;
   }
 
+  /// Sincroniza el cliente desde el TextField (ver `CartController.setClient`).
+  void setClient(String? value) {
+    final cleaned = _clean(value);
+    if (cleaned == state.client) return;
+    state = DateCartState(bets: state.bets, client: cleaned);
+  }
+
   void removeAt(int index) {
     state = DateCartState(
       bets: [...state.bets]..removeAt(index),

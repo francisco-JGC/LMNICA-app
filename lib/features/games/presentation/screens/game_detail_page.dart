@@ -152,6 +152,7 @@ class _RegularGameView extends ConsumerWidget {
           QuickBetForm(
             key: ValueKey('quick-bet-form-$formResetKey'),
             onSubmit: controller.addSingle,
+            onClientChanged: controller.setClient,
           ),
           Expanded(
             child: cart.isEmpty
@@ -275,6 +276,7 @@ class _DateGameView extends ConsumerWidget {
           QuickDateBetForm(
             key: ValueKey('quick-date-bet-form-$formResetKey'),
             onSubmit: controller.addSingle,
+            onClientChanged: controller.setClient,
           ),
           Expanded(
             child: cart.isEmpty
@@ -416,6 +418,7 @@ class _MultiSorteoGameViewState
             form: QuickBetForm(
               key: ValueKey('quick-bet-form-$formResetKey'),
               onSubmit: controller.addSingle,
+              onClientChanged: controller.setClient,
             ),
             isEmpty: cart.isEmpty,
             itemCount: cart.bets.length,
@@ -434,6 +437,7 @@ class _MultiSorteoGameViewState
             form: QuickDateBetForm(
               key: ValueKey('quick-date-bet-form-$formResetKey'),
               onSubmit: controller.addSingle,
+              onClientChanged: controller.setClient,
             ),
             isEmpty: cart.isEmpty,
             emptyIcon: Icons.calendar_month_outlined,
@@ -454,6 +458,7 @@ class _MultiSorteoGameViewState
             form: QuickGana3BetForm(
               key: ValueKey('quick-gana3-bet-form-$formResetKey'),
               onSubmit: controller.addSingle,
+              onClientChanged: controller.setClient,
             ),
             isEmpty: cart.isEmpty,
             itemCount: cart.bets.length,
@@ -472,6 +477,7 @@ class _MultiSorteoGameViewState
             form: QuickComboBetForm(
               key: ValueKey('quick-combo-bet-form-$formResetKey'),
               onSubmit: controller.addSingle,
+              onClientChanged: controller.setClient,
             ),
             isEmpty: cart.isEmpty,
             itemCount: cart.bets.length,
@@ -1005,6 +1011,7 @@ class _ComboGameView extends ConsumerWidget {
           QuickComboBetForm(
             key: ValueKey('quick-combo-bet-form-$formResetKey'),
             onSubmit: controller.addSingle,
+            onClientChanged: controller.setClient,
           ),
           Expanded(
             child: cart.isEmpty
@@ -1112,6 +1119,7 @@ class _Gana3GameView extends ConsumerWidget {
           QuickGana3BetForm(
             key: ValueKey('quick-gana3-bet-form-$formResetKey'),
             onSubmit: controller.addSingle,
+            onClientChanged: controller.setClient,
           ),
           Expanded(
             child: cart.isEmpty

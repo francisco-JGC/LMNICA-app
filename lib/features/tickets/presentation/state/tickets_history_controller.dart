@@ -138,7 +138,12 @@ class TicketsHistoryController extends AsyncNotifier<List<TicketSummary>> {
       to: filters.to,
       gameId: filters.gameId,
       drawTime: filters.drawTime,
-      limit: 200,
+      // Alineado con `ListWinningTickets` (backend usa `limit: 1000`) —
+      // sin esto, en días con > 200 boletos la lista se truncaba y el
+      // `_TotalsBar` mostraba un `won` menor al que aparece en la
+      // pantalla de "Boletos ganadores" (misma data, pantallas distintas).
+      // Backend enforce Max(1000), así que 1000 es el techo aceptado.
+      limit: 1000,
     ));
     return result.fold(
       (failure) => throw Exception(failure.message),

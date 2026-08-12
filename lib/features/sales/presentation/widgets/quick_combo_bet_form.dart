@@ -7,6 +7,7 @@ import '../state/cart_controller.dart';
 class QuickComboBetForm extends StatefulWidget {
   const QuickComboBetForm({
     required this.onSubmit,
+    this.onClientChanged,
     this.clientController,
     super.key,
   });
@@ -16,6 +17,10 @@ class QuickComboBetForm extends StatefulWidget {
     required int amount,
     String? client,
   }) onSubmit;
+
+  /// Se dispara en cada keystroke del campo "Cliente". Ver
+  /// `QuickBetForm.onClientChanged` para el rationale.
+  final void Function(String value)? onClientChanged;
 
   final TextEditingController? clientController;
 
@@ -40,17 +45,23 @@ class _QuickComboBetFormState extends State<QuickComboBetForm> {
     super.initState();
     _numberCtrl.addListener(_onNumberChanged);
     _amountCtrl.addListener(_onAmountChanged);
+    _clientCtrl.addListener(_onClientChanged);
   }
 
   @override
   void dispose() {
     _numberCtrl.dispose();
     _amountCtrl.dispose();
+    _clientCtrl.removeListener(_onClientChanged);
     if (widget.clientController == null) _clientCtrl.dispose();
     _numberFocus.dispose();
     _amountFocus.dispose();
     _clientFocus.dispose();
     super.dispose();
+  }
+
+  void _onClientChanged() {
+    widget.onClientChanged?.call(_clientCtrl.text);
   }
 
   void _onNumberChanged() {

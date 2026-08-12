@@ -88,6 +88,13 @@ class Gana3CartController extends Notifier<Gana3CartState> {
     return result;
   }
 
+  /// Sincroniza el cliente desde el TextField (ver `CartController.setClient`).
+  void setClient(String? value) {
+    final cleaned = _clean(value);
+    if (cleaned == state.client) return;
+    state = Gana3CartState(bets: state.bets, client: cleaned);
+  }
+
   void removeAt(int index) {
     state = Gana3CartState(
       bets: [...state.bets]..removeAt(index),

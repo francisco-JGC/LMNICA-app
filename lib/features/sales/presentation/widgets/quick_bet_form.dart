@@ -7,6 +7,7 @@ import '../state/cart_controller.dart';
 class QuickBetForm extends StatefulWidget {
   const QuickBetForm({
     required this.onSubmit,
+    this.onClientChanged,
     this.clientController,
     super.key,
   });
@@ -16,6 +17,12 @@ class QuickBetForm extends StatefulWidget {
     required int amount,
     String? client,
   }) onSubmit;
+
+  /// Se dispara en cada keystroke del campo "Cliente". El parent lo usa
+  /// para mantener el `cart.client` alineado con lo que ve el vendedor
+  /// aunque no submitee un número. Sin esto, escribir el nombre después
+  /// del último bet y darle "Imprimir" mandaba el ticket sin cliente.
+  final void Function(String value)? onClientChanged;
 
   final TextEditingController? clientController;
 
@@ -40,17 +47,23 @@ class _QuickBetFormState extends State<QuickBetForm> {
     super.initState();
     _numberCtrl.addListener(_onNumberChanged);
     _amountCtrl.addListener(_onAmountChanged);
+    _clientCtrl.addListener(_onClientChanged);
   }
 
   @override
   void dispose() {
     _numberCtrl.dispose();
     _amountCtrl.dispose();
+    _clientCtrl.removeListener(_onClientChanged);
     if (widget.clientController == null) _clientCtrl.dispose();
     _numberFocus.dispose();
     _amountFocus.dispose();
     _clientFocus.dispose();
     super.dispose();
+  }
+
+  void _onClientChanged() {
+    widget.onClientChanged?.call(_clientCtrl.text);
   }
 
   void _onNumberChanged() {

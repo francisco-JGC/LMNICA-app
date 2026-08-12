@@ -8,6 +8,7 @@ import '../state/cart_controller.dart';
 class QuickDateBetForm extends StatefulWidget {
   const QuickDateBetForm({
     required this.onSubmit,
+    this.onClientChanged,
     this.clientController,
     super.key,
   });
@@ -18,6 +19,10 @@ class QuickDateBetForm extends StatefulWidget {
     required int amount,
     String? client,
   }) onSubmit;
+
+  /// Se dispara en cada keystroke del campo "Cliente". Ver
+  /// `QuickBetForm.onClientChanged` para el rationale.
+  final void Function(String value)? onClientChanged;
 
   final TextEditingController? clientController;
 
@@ -43,17 +48,23 @@ class _QuickDateBetFormState extends State<QuickDateBetForm> {
     super.initState();
     _dayCtrl.addListener(_onDayChanged);
     _amountCtrl.addListener(_onAmountChanged);
+    _clientCtrl.addListener(_onClientChanged);
   }
 
   @override
   void dispose() {
     _dayCtrl.dispose();
     _amountCtrl.dispose();
+    _clientCtrl.removeListener(_onClientChanged);
     if (widget.clientController == null) _clientCtrl.dispose();
     _dayFocus.dispose();
     _amountFocus.dispose();
     _clientFocus.dispose();
     super.dispose();
+  }
+
+  void _onClientChanged() {
+    widget.onClientChanged?.call(_clientCtrl.text);
   }
 
   void _onDayChanged() {

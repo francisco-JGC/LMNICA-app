@@ -83,6 +83,19 @@ class CartController extends Notifier<CartState> {
     return result;
   }
 
+  /// Sincroniza el nombre del cliente desde el TextField del quick-form.
+  /// Se llama en cada keystroke (via listener) para que `state.client` esté
+  /// siempre alineado con lo que el vendedor ve en pantalla. Sin esto, si
+  /// el vendedor escribía el nombre DESPUÉS de haber agregado el último
+  /// número al cart y luego apretaba "Imprimir", el nombre no salía en el
+  /// boleto — `state.client` había quedado null porque en cada `addSingle`
+  /// previo el campo estaba vacío.
+  void setClient(String? value) {
+    final cleaned = _clean(value);
+    if (cleaned == state.client) return;
+    state = CartState(bets: state.bets, client: cleaned);
+  }
+
   void removeAt(int index) {
     state = CartState(
       bets: [...state.bets]..removeAt(index),
