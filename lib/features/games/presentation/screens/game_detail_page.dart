@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 import '../../../../core/di/injection.dart';
 import '../../../../core/session/current_user.dart';
 import '../../../../core/utils/currency.dart';
@@ -73,6 +74,10 @@ final ticketSubmittingProvider =
 /// del ciclo de Flutter/Riverpod, solo del event loop de Dart, así que
 /// dos taps back-to-back en el mismo micro-turno también quedan cubiertos.
 bool _submissionInFlight = false;
+
+/// UUID v4 generator compartido — barato de instanciar pero reutilizamos
+/// para no crear un `Random` nuevo por venta.
+const _uuid = Uuid();
 
 class GameDetailPage extends ConsumerWidget {
   const GameDetailPage({required this.gameId, this.game, super.key});
@@ -1463,12 +1468,20 @@ Future<void> _persistAndPrintInner(
     );
   }).toList();
 
+  // UUID de idempotencia — se genera UNA sola vez por intento de venta y
+  // se manda al backend. Si la respuesta se pierde (timeout, red mala) y
+  // el vendedor toca "Enviar" de nuevo, o si el `AuthInterceptor` reintenta
+  // tras un refresh de token, el segundo POST llega con el mismo id y el
+  // backend devuelve el ticket existente en lugar de duplicarlo.
+  final clientRequestId = _uuid.v4();
+
   final request = CreateTicketRequest(
     gameId: game.id,
     salePointId: salePoint.id,
     client: client,
     drawAt: drawAt,
     lines: requestLines,
+    clientRequestId: clientRequestId,
   );
 
   final result = await getIt<CreateTicket>().call(request);

@@ -44,6 +44,7 @@ class CreateTicketRequest extends Equatable {
     required this.lines,
     this.client,
     this.drawAt,
+    this.clientRequestId,
   });
 
   final String gameId;
@@ -52,14 +53,23 @@ class CreateTicketRequest extends Equatable {
   final String? client;
   final DateTime? drawAt;
 
+  /// UUID v4 generado una sola vez por intento de venta. Se manda al backend
+  /// para dedupear reintentos: si la respuesta se pierde y el vendedor toca
+  /// "Enviar" de nuevo, o si el interceptor de auth reintenta tras un 401,
+  /// el segundo POST llega con el MISMO `clientRequestId` y el backend
+  /// devuelve el ticket ya creado en lugar de duplicarlo.
+  final String? clientRequestId;
+
   Map<String, dynamic> toJson() => {
         'gameId': gameId,
         'salePointId': salePointId,
         if (client != null) 'client': client,
         'lines': lines.map((l) => l.toJson()).toList(),
         if (drawAt != null) 'drawAt': drawAt!.toUtc().toIso8601String(),
+        if (clientRequestId != null) 'clientRequestId': clientRequestId,
       };
 
   @override
-  List<Object?> get props => [gameId, salePointId, lines, client, drawAt];
+  List<Object?> get props =>
+      [gameId, salePointId, lines, client, drawAt, clientRequestId];
 }
