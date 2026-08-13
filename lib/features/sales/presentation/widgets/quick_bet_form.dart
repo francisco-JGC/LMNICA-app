@@ -9,7 +9,6 @@ class QuickBetForm extends StatefulWidget {
     required this.onSubmit,
     this.onClientChanged,
     this.clientController,
-    this.keepAmountAfterAdd = false,
     super.key,
   });
 
@@ -26,12 +25,6 @@ class QuickBetForm extends StatefulWidget {
   final void Function(String value)? onClientChanged;
 
   final TextEditingController? clientController;
-
-  /// Si `true`, después de agregar un número el campo de MONTO conserva
-  /// su valor (útil para entrar varios números con el mismo monto). Si
-  /// `false`, se limpia el monto (comportamiento por defecto). Se
-  /// controla desde Configuración → "Mantener el monto entre números".
-  final bool keepAmountAfterAdd;
 
   @override
   State<QuickBetForm> createState() => _QuickBetFormState();
@@ -55,6 +48,7 @@ class _QuickBetFormState extends State<QuickBetForm> {
     _numberCtrl.addListener(_onNumberChanged);
     _amountCtrl.addListener(_onAmountChanged);
     _clientCtrl.addListener(_onClientChanged);
+    _amountFocus.addListener(_onAmountFocusChanged);
   }
 
   @override
@@ -64,6 +58,7 @@ class _QuickBetFormState extends State<QuickBetForm> {
     _clientCtrl.removeListener(_onClientChanged);
     if (widget.clientController == null) _clientCtrl.dispose();
     _numberFocus.dispose();
+    _amountFocus.removeListener(_onAmountFocusChanged);
     _amountFocus.dispose();
     _clientFocus.dispose();
     super.dispose();
@@ -71,6 +66,21 @@ class _QuickBetFormState extends State<QuickBetForm> {
 
   void _onClientChanged() {
     widget.onClientChanged?.call(_clientCtrl.text);
+  }
+
+  /// Cuando el campo de MONTO recibe foco (por auto-focus tras completar
+  /// el número, o por tap manual), auto-seleccionamos todo su contenido.
+  /// Así el vendedor:
+  ///   - Si quiere mantener el monto → simplemente sigue al siguiente número.
+  ///   - Si quiere cambiarlo → tipea directamente y reemplaza la selección.
+  /// Antes había que borrar y retipear cada vez.
+  void _onAmountFocusChanged() {
+    if (_amountFocus.hasFocus && _amountCtrl.text.isNotEmpty) {
+      _amountCtrl.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _amountCtrl.text.length,
+      );
+    }
   }
 
   void _onNumberChanged() {
@@ -112,12 +122,11 @@ class _QuickBetFormState extends State<QuickBetForm> {
     }
 
     _numberCtrl.clear();
-    // Solo limpiamos el monto si la preferencia está apagada. Con
-    // `keepAmountAfterAdd = true` el vendedor puede meter varios números
-    // seguidos con el mismo monto sin retipearlo.
-    if (!widget.keepAmountAfterAdd) {
-      _amountCtrl.clear();
-    }
+    // El monto NO se limpia — queda para que el vendedor pueda meter
+    // varios números seguidos con el mismo monto sin retipearlo. Cuando
+    // el foco vuelva al campo de monto (auto-focus post número de 2
+    // dígitos o tap manual), el listener `_onAmountFocusChanged` auto-
+    // selecciona todo el texto para que tipear lo reemplace de una.
     setState(() => _errorMessage = null);
     _numberFocus.requestFocus();
   }

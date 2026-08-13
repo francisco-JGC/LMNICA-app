@@ -10,7 +10,6 @@ class QuickDateBetForm extends StatefulWidget {
     required this.onSubmit,
     this.onClientChanged,
     this.clientController,
-    this.keepAmountAfterAdd = false,
     super.key,
   });
 
@@ -26,9 +25,6 @@ class QuickDateBetForm extends StatefulWidget {
   final void Function(String value)? onClientChanged;
 
   final TextEditingController? clientController;
-
-  /// Ver `QuickBetForm.keepAmountAfterAdd`.
-  final bool keepAmountAfterAdd;
 
   @override
   State<QuickDateBetForm> createState() => _QuickDateBetFormState();
@@ -53,6 +49,7 @@ class _QuickDateBetFormState extends State<QuickDateBetForm> {
     _dayCtrl.addListener(_onDayChanged);
     _amountCtrl.addListener(_onAmountChanged);
     _clientCtrl.addListener(_onClientChanged);
+    _amountFocus.addListener(_onAmountFocusChanged);
   }
 
   @override
@@ -62,6 +59,7 @@ class _QuickDateBetFormState extends State<QuickDateBetForm> {
     _clientCtrl.removeListener(_onClientChanged);
     if (widget.clientController == null) _clientCtrl.dispose();
     _dayFocus.dispose();
+    _amountFocus.removeListener(_onAmountFocusChanged);
     _amountFocus.dispose();
     _clientFocus.dispose();
     super.dispose();
@@ -69,6 +67,16 @@ class _QuickDateBetFormState extends State<QuickDateBetForm> {
 
   void _onClientChanged() {
     widget.onClientChanged?.call(_clientCtrl.text);
+  }
+
+  /// Ver `QuickBetForm._onAmountFocusChanged`.
+  void _onAmountFocusChanged() {
+    if (_amountFocus.hasFocus && _amountCtrl.text.isNotEmpty) {
+      _amountCtrl.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _amountCtrl.text.length,
+      );
+    }
   }
 
   void _onDayChanged() {
@@ -111,9 +119,7 @@ class _QuickDateBetFormState extends State<QuickDateBetForm> {
     }
 
     _dayCtrl.clear();
-    if (!widget.keepAmountAfterAdd) {
-      _amountCtrl.clear();
-    }
+    // El monto NO se limpia — ver `QuickBetForm._submit`.
     setState(() => _errorMessage = null);
     _dayFocus.requestFocus();
   }

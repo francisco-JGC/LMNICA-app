@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../domain/entities/billing_method.dart';
-import '../state/keep_amount_controller.dart';
 import '../state/settings_controller.dart';
 
 class SettingsPage extends ConsumerWidget {
@@ -37,9 +36,6 @@ class SettingsPage extends ConsumerWidget {
                   value: m,
                 ),
               const Divider(),
-              const _SectionHeader(title: 'Ventas'),
-              const _KeepAmountTile(),
-              const Divider(),
               const _SectionHeader(title: 'Impresora'),
               ListTile(
                 leading: const Icon(Icons.bluetooth),
@@ -52,28 +48,6 @@ class SettingsPage extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Switch para mantener el monto en el quick-form después de agregar un
-/// número. Aislado en su propio ConsumerWidget para no acoplarse al
-/// `settingsControllerProvider` (que carga async).
-class _KeepAmountTile extends ConsumerWidget {
-  const _KeepAmountTile();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final keep = ref.watch(keepAmountProvider);
-    return SwitchListTile(
-      title: const Text('Mantener el monto entre números'),
-      subtitle: const Text(
-        'Al agregar un número al ticket, el monto NO se borra — útil para '
-        'entrar varios números seguidos con el mismo monto.',
-      ),
-      value: keep,
-      onChanged: (value) =>
-          ref.read(keepAmountProvider.notifier).setValue(value),
     );
   }
 }

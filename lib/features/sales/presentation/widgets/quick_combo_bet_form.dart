@@ -9,7 +9,6 @@ class QuickComboBetForm extends StatefulWidget {
     required this.onSubmit,
     this.onClientChanged,
     this.clientController,
-    this.keepAmountAfterAdd = false,
     super.key,
   });
 
@@ -24,9 +23,6 @@ class QuickComboBetForm extends StatefulWidget {
   final void Function(String value)? onClientChanged;
 
   final TextEditingController? clientController;
-
-  /// Ver `QuickBetForm.keepAmountAfterAdd`.
-  final bool keepAmountAfterAdd;
 
   @override
   State<QuickComboBetForm> createState() => _QuickComboBetFormState();
@@ -50,6 +46,7 @@ class _QuickComboBetFormState extends State<QuickComboBetForm> {
     _numberCtrl.addListener(_onNumberChanged);
     _amountCtrl.addListener(_onAmountChanged);
     _clientCtrl.addListener(_onClientChanged);
+    _amountFocus.addListener(_onAmountFocusChanged);
   }
 
   @override
@@ -59,6 +56,7 @@ class _QuickComboBetFormState extends State<QuickComboBetForm> {
     _clientCtrl.removeListener(_onClientChanged);
     if (widget.clientController == null) _clientCtrl.dispose();
     _numberFocus.dispose();
+    _amountFocus.removeListener(_onAmountFocusChanged);
     _amountFocus.dispose();
     _clientFocus.dispose();
     super.dispose();
@@ -66,6 +64,16 @@ class _QuickComboBetFormState extends State<QuickComboBetForm> {
 
   void _onClientChanged() {
     widget.onClientChanged?.call(_clientCtrl.text);
+  }
+
+  /// Ver `QuickBetForm._onAmountFocusChanged`.
+  void _onAmountFocusChanged() {
+    if (_amountFocus.hasFocus && _amountCtrl.text.isNotEmpty) {
+      _amountCtrl.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _amountCtrl.text.length,
+      );
+    }
   }
 
   void _onNumberChanged() {
@@ -107,9 +115,7 @@ class _QuickComboBetFormState extends State<QuickComboBetForm> {
     }
 
     _numberCtrl.clear();
-    if (!widget.keepAmountAfterAdd) {
-      _amountCtrl.clear();
-    }
+    // El monto NO se limpia — ver `QuickBetForm._submit`.
     setState(() => _errorMessage = null);
     _numberFocus.requestFocus();
   }
