@@ -264,29 +264,34 @@ class PrinterController extends Notifier<PrinterState> {
     unawaited(Future.microtask(autoReconnect));
   }
 
-  /// Verifica que la impresora esté realmente lista para imprimir. Usada
-  /// desde el flujo de venta ANTES de crear el ticket en el backend, para
-  /// evitar el escenario de "state stale":
+  /// Verifica que la impresora esté REALMENTE lista para imprimir. Se
+  /// llama desde el flujo de venta ANTES de crear el ticket en el backend
+  /// — si retorna `false`, no se crea nada. Regla de negocio: "si da
+  /// error, no se crea el ticket".
   ///
-  ///   - `state.isConnected` dice `true` porque el usuario conectó antes.
-  ///   - Físicamente el socket BT murió (batería, timeout, distancia).
-  ///   - Si confiáramos en el state, el ticket se crea, los bytes van a
-  ///     un socket muerto y quedan buffered → salen impresos después
-  ///     cuando la impresora vuelve.
+  /// Por qué siempre hacemos un reconnect fresco (no confiamos en el
+  /// `connectionStatus` del plugin):
   ///
-  /// Estrategia:
-  ///   1. Preguntamos al plugin el status real (`connectionStatus`).
-  ///   2. Si el plugin dice "conectado" → confiamos y retornamos `true`.
-  ///   3. Si dice "no conectado" pero el state tiene un last device →
-  ///      intentamos un reconnect fresco. Si funciona, era false-negative
-  ///      del plugin y podemos seguir. Si no, la impresora realmente no
-  ///      está y limpiamos state para dejar que el vendedor lo vea.
+  ///   - En SPP baratos, `PrintBluetoothThermal.connectionStatus` devuelve
+  ///     `true` con sockets muertos (falso positivo). El escenario típico:
+  ///     el usuario deja el teléfono, la impresora se apaga por batería o
+  ///     timeout, el socket BT queda en un estado zombie. El plugin sigue
+  ///     diciendo "conectado", pero cualquier `writeBytes` falla o queda
+  ///     buffered en el stack de Android.
+  ///   - Si confiáramos en ese status y creáramos el ticket, el vendedor
+  ///     veía "falló impresión", reintentaba, y terminaba con dos tickets
+  ///     en el backend.
+  ///   - Un reconnect fresco (`disconnect` + `connect` a nivel plugin —
+  ///     ver `PrinterBluetoothDatasourceImpl.connect`) es la única forma
+  ///     de garantizar que el socket está VIVO ahora. Si el connect falla,
+  ///     la impresora realmente no está.
+  ///
+  /// Costo: ~500ms-2s por venta. Es el precio de la garantía "no crear
+  /// tickets fantasma". Si en el futuro este costo molesta, la
+  /// alternativa sería un endpoint de ACK a nivel firmware que aún no
+  /// tenemos con estas impresoras baratas.
   Future<bool> verifyConnectedOrReconnect() async {
     try {
-      final pluginConnected =
-          (await _repository.isConnected()).getOrElse((_) => false);
-      if (pluginConnected) return true;
-
       final device = state.connectedDevice;
       if (device == null) return false;
 

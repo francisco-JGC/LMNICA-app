@@ -1525,10 +1525,11 @@ Future<void> _persistAndPrintInner(
 
   final payload = buildPayload(receipt);
 
-  // Bifurcación por método de facturación. El ticket YA quedó persistido en
-  // el backend arriba — acá solo cambia cómo se lo entregamos al cliente.
-  // Si la entrega falla (impresora perdida, share cancelado), el ticket
-  // sigue existiendo y se puede reintentar desde el historial.
+  // Bifurcación por método de facturación. El ticket YA quedó persistido
+  // en el backend arriba — a este punto solo cambia cómo se lo entregamos
+  // al cliente. Un fallo acá no genera duplicados porque el verify previo
+  // al createTicket ya blindó la creación (fresh reconnect: si el socket
+  // no está vivo, no se crea el ticket).
   switch (billingMethod) {
     case BillingMethod.bluetoothPrinter:
       await ref.read(printerControllerProvider.notifier).printTicket(payload);
