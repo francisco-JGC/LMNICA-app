@@ -1420,7 +1420,6 @@ Future<void> _persistAndPrintInner(
   bool skipLockCheck = false,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
-  final printer = ref.read(printerControllerProvider);
   final salePoint = ref.read(activeSalePointProvider).selected;
   final lock = ref.read(gameLockControllerProvider(game.id));
   final billingMethod =
@@ -1440,13 +1439,28 @@ Future<void> _persistAndPrintInner(
   }
   // El check de impresora conectada solo aplica cuando el método activo la
   // requiere. Para whatsapp no hace falta impresora — se genera imagen.
-  if (billingMethod == BillingMethod.bluetoothPrinter && !printer.isConnected) {
-    messenger.showSnackBar(const SnackBar(
-      content: Text(
-        'No hay impresora conectada. Ve a Configuración → Impresora.',
-      ),
-    ));
-    return;
+  //
+  // CRÍTICO: en vez de confiar en el state cacheado (`printer.isConnected`),
+  // llamamos a `verifyConnectedOrReconnect` que pregunta al plugin el
+  // estado REAL del socket BT y, si dice "no", intenta reconectar. Esto
+  // ataca el escenario "state stale": el vendedor deja el teléfono ratos,
+  // el socket muere en background, el state sigue diciendo "conectado".
+  // Sin este verify, creábamos el ticket en el backend, mandábamos los
+  // bytes a un socket muerto que los buffereaba, y cuando la impresora
+  // volvía a aparearse esos bytes flusheaban → "ticket fantasma" impreso
+  // encima del que el vendedor quería sacar después.
+  if (billingMethod == BillingMethod.bluetoothPrinter) {
+    final verified = await ref
+        .read(printerControllerProvider.notifier)
+        .verifyConnectedOrReconnect();
+    if (!verified) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text(
+          'No hay impresora conectada. Ve a Configuración → Impresora.',
+        ),
+      ));
+      return;
+    }
   }
 
   // Rescale line prizes if this sucursal has per-game overrides. We look

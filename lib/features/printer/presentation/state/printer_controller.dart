@@ -217,39 +217,96 @@ class PrinterController extends Notifier<PrinterState> {
   Future<void> printTest() async {
     state = state.copyWith(isPrinting: true, clearError: true);
     final result = await _repository.printTest();
-    result.match(
-      // Un fallo en imprimir suele significar socket muerto (impresora
-      // apagada, sin batería, fuera de rango). Limpiamos `connectedDevice`
-      // y disparamos un autoReconnect inmediato — sin esperar el próximo
-      // tick del timer (hasta 8s) — para que el vendedor tenga la
-      // impresora lista lo antes posible cuando vuelva a intentar.
-      (failure) {
-        state = state.copyWith(
-          isPrinting: false,
-          errorMessage: failure.message,
-          clearConnectedDevice: true,
-        );
-        Future.microtask(autoReconnect);
-      },
-      (_) => state = state.copyWith(isPrinting: false),
+    final failure = result.fold<String?>((f) => f.message, (_) => null);
+    if (failure == null) {
+      state = state.copyWith(isPrinting: false);
+      return;
+    }
+    // Un fallo en imprimir suele significar socket muerto (impresora
+    // apagada, sin batería, fuera de rango). Cerramos el socket a nivel
+    // plugin para descartar cualquier byte buffered (ver `printTicket`),
+    // luego limpiamos `connectedDevice` y disparamos autoReconnect
+    // inmediato — sin esperar el próximo tick del timer — para que el
+    // vendedor tenga la impresora lista lo antes posible.
+    try {
+      await _repository.disconnect();
+    } catch (_) {}
+    state = state.copyWith(
+      isPrinting: false,
+      errorMessage: failure,
+      clearConnectedDevice: true,
     );
+    unawaited(Future.microtask(autoReconnect));
   }
 
   Future<void> printTicket(TicketPayload payload) async {
     state = state.copyWith(isPrinting: true, clearError: true);
     final result = await _repository.printTicket(payload);
-    result.match(
-      // Ver comentario en printTest — misma lógica.
-      (failure) {
-        state = state.copyWith(
-          isPrinting: false,
-          errorMessage: failure.message,
-          clearConnectedDevice: true,
-        );
-        Future.microtask(autoReconnect);
-      },
-      (_) => state = state.copyWith(isPrinting: false),
+    final failure = result.fold<String?>((f) => f.message, (_) => null);
+    if (failure == null) {
+      state = state.copyWith(isPrinting: false);
+      return;
+    }
+    // CRÍTICO: forzamos disconnect al plugin antes de limpiar el state.
+    // Sin esto, los bytes que ya escribimos a un socket BT muerto se
+    // quedan en el buffer del stack Android y flushean cuando la
+    // impresora vuelve a aparearse — imprimiendo un "ticket fantasma"
+    // encima del que el vendedor sí quería imprimir después. Cerrar el
+    // socket a nivel plugin descarta esos bytes.
+    try {
+      await _repository.disconnect();
+    } catch (_) {}
+    state = state.copyWith(
+      isPrinting: false,
+      errorMessage: failure,
+      clearConnectedDevice: true,
     );
+    unawaited(Future.microtask(autoReconnect));
+  }
+
+  /// Verifica que la impresora esté realmente lista para imprimir. Usada
+  /// desde el flujo de venta ANTES de crear el ticket en el backend, para
+  /// evitar el escenario de "state stale":
+  ///
+  ///   - `state.isConnected` dice `true` porque el usuario conectó antes.
+  ///   - Físicamente el socket BT murió (batería, timeout, distancia).
+  ///   - Si confiáramos en el state, el ticket se crea, los bytes van a
+  ///     un socket muerto y quedan buffered → salen impresos después
+  ///     cuando la impresora vuelve.
+  ///
+  /// Estrategia:
+  ///   1. Preguntamos al plugin el status real (`connectionStatus`).
+  ///   2. Si el plugin dice "conectado" → confiamos y retornamos `true`.
+  ///   3. Si dice "no conectado" pero el state tiene un last device →
+  ///      intentamos un reconnect fresco. Si funciona, era false-negative
+  ///      del plugin y podemos seguir. Si no, la impresora realmente no
+  ///      está y limpiamos state para dejar que el vendedor lo vea.
+  Future<bool> verifyConnectedOrReconnect() async {
+    try {
+      final pluginConnected =
+          (await _repository.isConnected()).getOrElse((_) => false);
+      if (pluginConnected) return true;
+
+      final device = state.connectedDevice;
+      if (device == null) return false;
+
+      final btOk =
+          (await _repository.isBluetoothEnabled()).getOrElse((_) => false);
+      if (!btOk) {
+        state = state.copyWith(clearConnectedDevice: true);
+        return false;
+      }
+
+      final result = await _repository.connect(device.address);
+      final ok = result.match((_) => false, (_) => true);
+      if (!ok) {
+        state = state.copyWith(clearConnectedDevice: true);
+      }
+      return ok;
+    } catch (_) {
+      state = state.copyWith(clearConnectedDevice: true);
+      return false;
+    }
   }
 
   Future<void> openSystemSettings() => openAppSettings();
