@@ -80,13 +80,35 @@ final ticketsHistoryFiltersProvider =
   TicketsHistoryFiltersNotifier.new,
 );
 
-class TicketsHistoryController extends AsyncNotifier<List<TicketSummary>> {
+/// Estado de la pantalla de Facturas — items paginados + totales agregados
+/// del rango completo (server-side). Los totales viajan con el response del
+/// endpoint `/tickets` y evitan que la barra de totales quede corta cuando
+/// el vendedor tiene más tickets que el `limit` de la página.
+class TicketsHistoryData {
+  const TicketsHistoryData({
+    required this.items,
+    required this.totalBilled,
+    required this.totalWonPrize,
+  });
+
+  final List<TicketSummary> items;
+  final int totalBilled;
+  final int totalWonPrize;
+
+  static const empty = TicketsHistoryData(
+    items: [],
+    totalBilled: 0,
+    totalWonPrize: 0,
+  );
+}
+
+class TicketsHistoryController extends AsyncNotifier<TicketsHistoryData> {
   late final _list = getIt<ListMyTickets>();
   late final _void = getIt<VoidMyTicket>();
   late final _repository = getIt<TicketsRepository>();
 
   @override
-  Future<List<TicketSummary>> build() async {
+  Future<TicketsHistoryData> build() async {
     ref.listen(ticketsHistoryFiltersProvider, (previous, next) {
       if (previous != next) refresh();
     });
@@ -103,9 +125,15 @@ class TicketsHistoryController extends AsyncNotifier<List<TicketSummary>> {
     required String reason,
   }) async {
     final result = await _void(VoidMyTicketParams(id: id, reason: reason));
-    result.match(
-      (_) {},
-      _replace,
+    await result.match(
+      (_) async {},
+      (updated) async {
+        // Anular cambia el estado del ticket, por lo tanto los totales del
+        // rango (billed excluye anulados, wonPrize excluye anulados) también
+        // pueden variar. Recargamos del server para mantener consistencia
+        // con la ventana de Boletos Ganadores.
+        await refresh();
+      },
     );
     return result;
   }
@@ -122,37 +150,44 @@ class TicketsHistoryController extends AsyncNotifier<List<TicketSummary>> {
   void _replace(TicketSummary updated) {
     final current = state.value;
     if (current == null) return;
-    state = AsyncValue.data(current
+    final items = current.items
         .map<TicketSummary>((t) => t.id == updated.id ? updated : t)
-        .toList());
+        .toList();
+    state = AsyncValue.data(TicketsHistoryData(
+      items: items,
+      totalBilled: current.totalBilled,
+      totalWonPrize: current.totalWonPrize,
+    ));
   }
 
-  Future<List<TicketSummary>> _fetch() async {
+  Future<TicketsHistoryData> _fetch() async {
     final salePoint = ref.read(activeSalePointProvider).selected;
-    if (salePoint == null) return const [];
+    if (salePoint == null) return TicketsHistoryData.empty;
     final filters = ref.read(ticketsHistoryFiltersProvider);
 
+    // El endpoint no pagina — trae todo el rango filtrado. Los totales
+    // vienen calculados server-side sobre el mismo set, así que la barra
+    // de totales usa `result.totalBilled` / `result.totalWonPrize`
+    // directamente y coincide 1:1 con `/tickets/winners`.
     final result = await _list(ListTicketsQuery(
       salePointId: salePoint.id,
       from: filters.from,
       to: filters.to,
       gameId: filters.gameId,
       drawTime: filters.drawTime,
-      // Alineado con `ListWinningTickets` (backend usa `limit: 1000`) —
-      // sin esto, en días con > 200 boletos la lista se truncaba y el
-      // `_TotalsBar` mostraba un `won` menor al que aparece en la
-      // pantalla de "Boletos ganadores" (misma data, pantallas distintas).
-      // Backend enforce Max(1000), así que 1000 es el techo aceptado.
-      limit: 1000,
     ));
     return result.fold(
       (failure) => throw Exception(failure.message),
-      (r) => r.items,
+      (r) => TicketsHistoryData(
+        items: r.items,
+        totalBilled: r.totalBilled,
+        totalWonPrize: r.totalWonPrize,
+      ),
     );
   }
 }
 
 final ticketsHistoryControllerProvider = AsyncNotifierProvider<
-    TicketsHistoryController, List<TicketSummary>>(
+    TicketsHistoryController, TicketsHistoryData>(
   TicketsHistoryController.new,
 );

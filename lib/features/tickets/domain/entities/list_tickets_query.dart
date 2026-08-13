@@ -11,8 +11,6 @@ class ListTicketsQuery extends Equatable {
     this.status,
     this.from,
     this.to,
-    this.page = 1,
-    this.limit = 50,
   });
 
   final String? salePointId;
@@ -22,38 +20,41 @@ class ListTicketsQuery extends Equatable {
   final TicketStatus? status;
   final DateTime? from;
   final DateTime? to;
-  final int page;
-  final int limit;
 
   Map<String, dynamic> toQueryParameters() => {
         if (salePointId != null) 'salePointId': salePointId,
         if (gameId != null) 'gameId': gameId,
         if (drawTime != null) 'drawTime': drawTime,
-        if (status != null) 'status': status == TicketStatus.voided ? 'voided' : 'valid',
+        if (status != null)
+          'status': status == TicketStatus.voided ? 'voided' : 'valid',
         if (from != null) 'from': BusinessTime.toBusinessIso(from!),
         if (to != null) 'to': BusinessTime.toBusinessIso(to!),
-        'page': page,
-        'limit': limit,
       };
 
   @override
-  List<Object?> get props =>
-      [salePointId, gameId, drawTime, status, from, to, page, limit];
+  List<Object?> get props => [salePointId, gameId, drawTime, status, from, to];
 }
 
 class ListTicketsResult extends Equatable {
   const ListTicketsResult({
     required this.items,
-    required this.page,
-    required this.limit,
     required this.total,
+    required this.totalBilled,
+    required this.totalWonPrize,
   });
 
   final List<TicketSummary> items;
-  final int page;
-  final int limit;
   final int total;
 
+  /// Total facturado sobre TODO el rango filtrado. El endpoint no pagina,
+  /// así que este número refleja exactamente lo mismo que `items`, pero
+  /// el widget de totales lo usa directamente sin re-sumar client-side.
+  final int totalBilled;
+
+  /// Ídem `totalBilled` pero para wonPrize (premios ganados, evaluados
+  /// contra draw_results). Reconcilia con `/tickets/winners`.
+  final int totalWonPrize;
+
   @override
-  List<Object?> get props => [items, page, limit, total];
+  List<Object?> get props => [items, total, totalBilled, totalWonPrize];
 }

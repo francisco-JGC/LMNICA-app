@@ -32,9 +32,9 @@ class TicketsRepositoryImpl implements TicketsRepository {
       final raw = await remote.list(query);
       return ListTicketsResult(
         items: raw.items,
-        page: raw.page,
-        limit: raw.limit,
         total: raw.total,
+        totalBilled: raw.totalBilled,
+        totalWonPrize: raw.totalWonPrize,
       );
     });
   }

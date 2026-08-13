@@ -14,8 +14,13 @@ import '../models/tickets_summary_model.dart';
 
 abstract interface class TicketsRemoteDatasource {
   Future<TicketReceiptModel> create(CreateTicketRequest request);
-  Future<({List<TicketSummaryModel> items, int page, int limit, int total})>
-      list(ListTicketsQuery query);
+  Future<
+      ({
+        List<TicketSummaryModel> items,
+        int total,
+        int totalBilled,
+        int totalWonPrize,
+      })> list(ListTicketsQuery query);
   Future<TicketDetailModel> findById(String id);
   /// Lookup para el flujo de escaneo — sin restricción de dueño, permite
   /// a un vendedor escanear boletos que no son suyos (p. ej. de un
@@ -51,8 +56,13 @@ class TicketsRemoteDatasourceImpl implements TicketsRemoteDatasource {
   }
 
   @override
-  Future<({List<TicketSummaryModel> items, int page, int limit, int total})>
-      list(ListTicketsQuery query) async {
+  Future<
+      ({
+        List<TicketSummaryModel> items,
+        int total,
+        int totalBilled,
+        int totalWonPrize,
+      })> list(ListTicketsQuery query) async {
     try {
       final response = await client.instance.get<Map<String, dynamic>>(
         '/tickets',
@@ -67,9 +77,9 @@ class TicketsRemoteDatasourceImpl implements TicketsRemoteDatasource {
           .toList();
       return (
         items: items,
-        page: (data['page'] as num).toInt(),
-        limit: (data['limit'] as num).toInt(),
-        total: (data['total'] as num).toInt(),
+        total: (data['total'] as num?)?.toInt() ?? items.length,
+        totalBilled: (data['totalBilled'] as num?)?.toInt() ?? 0,
+        totalWonPrize: (data['totalWonPrize'] as num?)?.toInt() ?? 0,
       );
     } on DioException catch (e) {
       throw _mapError(e);

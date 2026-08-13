@@ -88,7 +88,7 @@ class TicketsHistoryPage extends ConsumerWidget {
                     .read(ticketsHistoryControllerProvider.notifier)
                     .refresh(),
               ),
-              data: (tickets) => tickets.isEmpty
+              data: (data) => data.items.isEmpty
                   ? const _EmptyView()
                   : RefreshIndicator(
                       onRefresh: () => ref
@@ -96,17 +96,17 @@ class TicketsHistoryPage extends ConsumerWidget {
                           .refresh(),
                       child: ListView.separated(
                         padding: const EdgeInsets.all(12),
-                        itemCount: tickets.length,
+                        itemCount: data.items.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, i) => _TicketTile(
-                          ticket: tickets[i],
-                          game: gamesById[tickets[i].gameId],
+                          ticket: data.items[i],
+                          game: gamesById[data.items[i].gameId],
                         ),
                       ),
                     ),
             ),
           ),
-          _TotalsBar(tickets: state.value ?? const []),
+          _TotalsBar(data: state.value ?? TicketsHistoryData.empty),
         ],
       ),
     );
@@ -114,18 +114,19 @@ class TicketsHistoryPage extends ConsumerWidget {
 }
 
 class _TotalsBar extends StatelessWidget {
-  const _TotalsBar({required this.tickets});
+  const _TotalsBar({required this.data});
 
-  final List<TicketSummary> tickets;
+  final TicketsHistoryData data;
 
   @override
   Widget build(BuildContext context) {
-    var billed = 0;
-    var won = 0;
-    for (final t in tickets) {
-      if (!t.isVoided) billed += t.total;
-      won += t.wonPrize;
-    }
+    // Los totales vienen del server calculados sobre el rango completo
+    // (no solo los items paginados). Sin esto la barra sumaba lo que
+    // había recibido y quedaba corta cuando el vendedor tenía más
+    // tickets que el `limit` de la página → discrepancia con
+    // "Boletos ganadores" que sí computa sobre todo el rango.
+    final billed = data.totalBilled;
+    final won = data.totalWonPrize;
     final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -464,7 +465,7 @@ Future<void> _confirmVoid(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Escribe el motivo de la anulación:'),
+          const Text('Motivo de la anulación (opcional):'),
           const SizedBox(height: 8),
           TextField(
             controller: reasonCtrl,
@@ -483,6 +484,8 @@ Future<void> _confirmVoid(
           child: const Text('Cancelar'),
         ),
         FilledButton(
+          // Empty string sentinela cuando el user confirma sin escribir motivo.
+          // `null` queda reservado para "canceló el diálogo".
           onPressed: () =>
               Navigator.of(dialogContext).pop(reasonCtrl.text.trim()),
           child: const Text('Anular'),
@@ -491,7 +494,9 @@ Future<void> _confirmVoid(
     ),
   );
 
-  if (result == null || result.isEmpty) return;
+  // Solo abortamos si el user cerró el diálogo (`null`). Un motivo vacío
+  // es válido — el backend lo persiste como `voided_reason = null`.
+  if (result == null) return;
 
   final either = await ref
       .read(ticketsHistoryControllerProvider.notifier)
