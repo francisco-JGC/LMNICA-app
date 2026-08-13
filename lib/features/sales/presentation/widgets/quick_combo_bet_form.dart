@@ -9,6 +9,7 @@ class QuickComboBetForm extends StatefulWidget {
     required this.onSubmit,
     this.onClientChanged,
     this.clientController,
+    this.keepAmountAfterAdd = false,
     super.key,
   });
 
@@ -23,6 +24,9 @@ class QuickComboBetForm extends StatefulWidget {
   final void Function(String value)? onClientChanged;
 
   final TextEditingController? clientController;
+
+  /// Ver `QuickBetForm.keepAmountAfterAdd`.
+  final bool keepAmountAfterAdd;
 
   @override
   State<QuickComboBetForm> createState() => _QuickComboBetFormState();
@@ -103,7 +107,9 @@ class _QuickComboBetFormState extends State<QuickComboBetForm> {
     }
 
     _numberCtrl.clear();
-    _amountCtrl.clear();
+    if (!widget.keepAmountAfterAdd) {
+      _amountCtrl.clear();
+    }
     setState(() => _errorMessage = null);
     _numberFocus.requestFocus();
   }

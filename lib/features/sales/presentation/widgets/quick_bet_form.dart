@@ -9,6 +9,7 @@ class QuickBetForm extends StatefulWidget {
     required this.onSubmit,
     this.onClientChanged,
     this.clientController,
+    this.keepAmountAfterAdd = false,
     super.key,
   });
 
@@ -25,6 +26,12 @@ class QuickBetForm extends StatefulWidget {
   final void Function(String value)? onClientChanged;
 
   final TextEditingController? clientController;
+
+  /// Si `true`, después de agregar un número el campo de MONTO conserva
+  /// su valor (útil para entrar varios números con el mismo monto). Si
+  /// `false`, se limpia el monto (comportamiento por defecto). Se
+  /// controla desde Configuración → "Mantener el monto entre números".
+  final bool keepAmountAfterAdd;
 
   @override
   State<QuickBetForm> createState() => _QuickBetFormState();
@@ -105,7 +112,12 @@ class _QuickBetFormState extends State<QuickBetForm> {
     }
 
     _numberCtrl.clear();
-    _amountCtrl.clear();
+    // Solo limpiamos el monto si la preferencia está apagada. Con
+    // `keepAmountAfterAdd = true` el vendedor puede meter varios números
+    // seguidos con el mismo monto sin retipearlo.
+    if (!widget.keepAmountAfterAdd) {
+      _amountCtrl.clear();
+    }
     setState(() => _errorMessage = null);
     _numberFocus.requestFocus();
   }

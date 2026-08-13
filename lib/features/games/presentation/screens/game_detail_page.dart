@@ -41,6 +41,7 @@ import '../../../schedules/presentation/state/available_draws_provider.dart';
 import '../../../schedules/presentation/state/game_lock_controller.dart';
 import '../../../schedules/presentation/widgets/game_lock_gate.dart';
 import '../../../settings/domain/entities/billing_method.dart';
+import '../../../settings/presentation/state/keep_amount_controller.dart';
 import '../../../settings/presentation/state/settings_controller.dart';
 import '../../../tickets/domain/entities/create_ticket_request.dart';
 import '../../../tickets/domain/entities/ticket_receipt.dart';
@@ -153,6 +154,7 @@ class _RegularGameView extends ConsumerWidget {
             key: ValueKey('quick-bet-form-$formResetKey'),
             onSubmit: controller.addSingle,
             onClientChanged: controller.setClient,
+            keepAmountAfterAdd: ref.watch(keepAmountProvider),
           ),
           Expanded(
             child: cart.isEmpty
@@ -277,6 +279,7 @@ class _DateGameView extends ConsumerWidget {
             key: ValueKey('quick-date-bet-form-$formResetKey'),
             onSubmit: controller.addSingle,
             onClientChanged: controller.setClient,
+            keepAmountAfterAdd: ref.watch(keepAmountProvider),
           ),
           Expanded(
             child: cart.isEmpty
@@ -419,6 +422,7 @@ class _MultiSorteoGameViewState
               key: ValueKey('quick-bet-form-$formResetKey'),
               onSubmit: controller.addSingle,
               onClientChanged: controller.setClient,
+              keepAmountAfterAdd: ref.watch(keepAmountProvider),
             ),
             isEmpty: cart.isEmpty,
             itemCount: cart.bets.length,
@@ -438,6 +442,7 @@ class _MultiSorteoGameViewState
               key: ValueKey('quick-date-bet-form-$formResetKey'),
               onSubmit: controller.addSingle,
               onClientChanged: controller.setClient,
+              keepAmountAfterAdd: ref.watch(keepAmountProvider),
             ),
             isEmpty: cart.isEmpty,
             emptyIcon: Icons.calendar_month_outlined,
@@ -459,6 +464,7 @@ class _MultiSorteoGameViewState
               key: ValueKey('quick-gana3-bet-form-$formResetKey'),
               onSubmit: controller.addSingle,
               onClientChanged: controller.setClient,
+              keepAmountAfterAdd: ref.watch(keepAmountProvider),
             ),
             isEmpty: cart.isEmpty,
             itemCount: cart.bets.length,
@@ -478,6 +484,7 @@ class _MultiSorteoGameViewState
               key: ValueKey('quick-combo-bet-form-$formResetKey'),
               onSubmit: controller.addSingle,
               onClientChanged: controller.setClient,
+              keepAmountAfterAdd: ref.watch(keepAmountProvider),
             ),
             isEmpty: cart.isEmpty,
             itemCount: cart.bets.length,
@@ -1012,6 +1019,7 @@ class _ComboGameView extends ConsumerWidget {
             key: ValueKey('quick-combo-bet-form-$formResetKey'),
             onSubmit: controller.addSingle,
             onClientChanged: controller.setClient,
+            keepAmountAfterAdd: ref.watch(keepAmountProvider),
           ),
           Expanded(
             child: cart.isEmpty
@@ -1120,6 +1128,7 @@ class _Gana3GameView extends ConsumerWidget {
             key: ValueKey('quick-gana3-bet-form-$formResetKey'),
             onSubmit: controller.addSingle,
             onClientChanged: controller.setClient,
+            keepAmountAfterAdd: ref.watch(keepAmountProvider),
           ),
           Expanded(
             child: cart.isEmpty
