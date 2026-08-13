@@ -80,6 +80,44 @@ bool _submissionInFlight = false;
 /// para no crear un `Random` nuevo por venta.
 const _uuid = Uuid();
 
+/// Cache de `clientRequestId` por "huella" del carrito (game + sucursal +
+/// drawAt + números). Sirve de segunda capa de defensa contra duplicados
+/// cuando algo falla DESPUÉS de que se creó el ticket en el backend
+/// (típicamente: el plugin BT reporta connect exitoso pero el writeBytes
+/// falla porque el socket estaba muerto). Ver `_persistAndPrintInner`.
+///
+/// Ciclo de vida de una entrada:
+///   1. Primer intento con esa huella → generamos UUID, lo cacheamos, lo
+///      mandamos al backend en el body.
+///   2. Retries con la MISMA huella (mismos números, mismo sorteo) → el
+///      backend dedupea vía `client_request_id` UNIQUE. Nunca hay dos
+///      registros contables.
+///   3. Al completar exitosamente el flujo (impresión OK) → limpiamos la
+///      entrada. La próxima venta con los mismos números será un ticket
+///      nuevo (potencialmente otro cliente).
+///
+/// Sin este cache, un intento fallido + retry generaba dos UUIDs distintos
+/// y por lo tanto dos tickets distintos en el backend — el efecto que el
+/// vendedor reportaba como "boleto duplicado".
+final Map<String, String> _pendingRequestIdByFingerprint = <String, String>{};
+
+/// Huella determinística del carrito para dedupear reintentos del mismo
+/// contenido. Deliberadamente NO incluye `client` porque el vendedor
+/// puede modificarlo entre reintentos sin cambiar la "venta" desde el
+/// punto de vista contable.
+String _cartFingerprint({
+  required String gameId,
+  required String salePointId,
+  required DateTime? drawAt,
+  required List<_RequestLine> lines,
+}) {
+  final sortedLines = lines
+      .map((l) => '${l.label}|${l.amount}|${l.subGameId ?? ''}')
+      .toList()
+    ..sort();
+  return '$gameId|$salePointId|${drawAt?.toIso8601String() ?? ''}|${sortedLines.join(',')}';
+}
+
 class GameDetailPage extends ConsumerWidget {
   const GameDetailPage({required this.gameId, this.game, super.key});
 
@@ -1499,12 +1537,27 @@ Future<void> _persistAndPrintInner(
     );
   }).toList();
 
-  // UUID de idempotencia — se genera UNA sola vez por intento de venta y
-  // se manda al backend. Si la respuesta se pierde (timeout, red mala) y
-  // el vendedor toca "Enviar" de nuevo, o si el `AuthInterceptor` reintenta
-  // tras un refresh de token, el segundo POST llega con el mismo id y el
-  // backend devuelve el ticket existente en lugar de duplicarlo.
-  final clientRequestId = _uuid.v4();
+  // UUID de idempotencia — combina:
+  //   (a) Auto-retry del AuthInterceptor tras 401: el request queda con
+  //       el mismo UUID → backend dedupea.
+  //   (b) Retry manual del vendedor tras un error (impresión falló,
+  //       timeout de red, etc.): el CACHE `_pendingRequestIdByFingerprint`
+  //       hace que el mismo carrito (mismos números, mismo sorteo) reuse
+  //       el UUID cacheado del intento anterior → backend dedupea → NO
+  //       hay boleto duplicado en el registro contable aunque el vendedor
+  //       toque "Imprimir" varias veces.
+  // El cache se limpia solo cuando la venta se completa exitosamente
+  // (después de `onSuccess()`), así la próxima venta con los mismos
+  // números es una venta nueva de un potencial cliente distinto.
+  final fingerprint = _cartFingerprint(
+    gameId: game.id,
+    salePointId: salePoint.id,
+    drawAt: drawAt,
+    lines: lines,
+  );
+  final clientRequestId =
+      _pendingRequestIdByFingerprint[fingerprint] ?? _uuid.v4();
+  _pendingRequestIdByFingerprint[fingerprint] = clientRequestId;
 
   final request = CreateTicketRequest(
     gameId: game.id,
@@ -1563,6 +1616,11 @@ Future<void> _persistAndPrintInner(
         return;
       }
   }
+
+  // Venta completada 100% (backend registrado + entregado). Liberamos
+  // el UUID cacheado: la próxima venta con los mismos números será un
+  // ticket nuevo (potencialmente otro cliente comprando lo mismo).
+  _pendingRequestIdByFingerprint.remove(fingerprint);
 
   onSuccess();
   final drawTime = formatTime12h(receipt.drawAt);
