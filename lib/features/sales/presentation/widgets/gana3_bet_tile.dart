@@ -1,16 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/currency.dart';
+import '../../../../core/utils/prize.dart';
+import '../../../game_prizes/presentation/state/effective_game_prizes_provider.dart';
 import '../../domain/entities/gana3_bet.dart';
 
-class Gana3BetTile extends StatelessWidget {
-  const Gana3BetTile({required this.bet, required this.onRemove, super.key});
+class Gana3BetTile extends ConsumerWidget {
+  const Gana3BetTile({
+    required this.bet,
+    required this.gameId,
+    required this.onRemove,
+    super.key,
+  });
 
   final Gana3Bet bet;
+  final String gameId;
   final VoidCallback onRemove;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final override = ref.watch(effectiveGamePrizeForGameProvider(gameId));
+    // Mismo formato de label que `game_detail_page` usa al armar líneas
+    // del ticket — el `(F)` es el signal que `rescaleEffectivePrize` mira
+    // para detectar fácil-pareja.
+    final labelForRescale =
+        bet.isExact ? bet.numberLabel : '${bet.numberLabel} (F)';
+    final prize = rescaleEffectivePrize(
+      bet.amount,
+      bet.prize,
+      override,
+      label: labelForRescale,
+    );
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
@@ -54,7 +76,7 @@ class Gana3BetTile extends StatelessWidget {
               size: 18, color: Colors.black),
           const SizedBox(width: 4),
           Text(
-            kCurrencyFormat.format(bet.prize),
+            kCurrencyFormat.format(prize),
             style: const TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w700,

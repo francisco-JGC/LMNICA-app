@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../../../core/di/injection.dart';
 import '../../../../core/session/current_user.dart';
 import '../../../../core/utils/currency.dart';
+import '../../../../core/utils/prize.dart';
 import '../../../../core/utils/time_format.dart';
 import '../../../game_prizes/domain/entities/effective_game_prize.dart';
 import '../../../game_prizes/presentation/state/effective_game_prizes_provider.dart';
@@ -201,6 +202,7 @@ class _RegularGameView extends ConsumerWidget {
                     separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (_, i) => BetTile(
                       bet: cart.bets[i],
+                      gameId: game.id,
                       onRemove: () => controller.removeAt(i),
                     ),
                   ),
@@ -328,6 +330,7 @@ class _DateGameView extends ConsumerWidget {
                     separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (_, i) => DateBetTile(
                       bet: cart.bets[i],
+                      gameId: game.id,
                       onRemove: () => controller.removeAt(i),
                     ),
                   ),
@@ -462,6 +465,7 @@ class _MultiSorteoGameViewState
             itemCount: cart.bets.length,
             itemBuilder: (i) => BetTile(
               bet: cart.bets[i],
+              gameId: sub.id,
               onRemove: () => controller.removeAt(i),
             ),
           ),
@@ -483,6 +487,7 @@ class _MultiSorteoGameViewState
             itemCount: cart.bets.length,
             itemBuilder: (i) => DateBetTile(
               bet: cart.bets[i],
+              gameId: sub.id,
               onRemove: () => controller.removeAt(i),
             ),
           ),
@@ -502,6 +507,7 @@ class _MultiSorteoGameViewState
             itemCount: cart.bets.length,
             itemBuilder: (i) => Gana3BetTile(
               bet: cart.bets[i],
+              gameId: sub.id,
               onRemove: () => controller.removeAt(i),
             ),
           ),
@@ -521,6 +527,7 @@ class _MultiSorteoGameViewState
             itemCount: cart.bets.length,
             itemBuilder: (i) => ComboBetTile(
               bet: cart.bets[i],
+              gameId: sub.id,
               onRemove: () => controller.removeAt(i),
             ),
           ),
@@ -1063,6 +1070,7 @@ class _ComboGameView extends ConsumerWidget {
                     separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (_, i) => ComboBetTile(
                       bet: cart.bets[i],
+                      gameId: game.id,
                       onRemove: () => controller.removeAt(i),
                     ),
                   ),
@@ -1171,6 +1179,7 @@ class _Gana3GameView extends ConsumerWidget {
                     separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (_, i) => Gana3BetTile(
                       bet: cart.bets[i],
+                      gameId: game.id,
                       onRemove: () => controller.removeAt(i),
                     ),
                   ),
@@ -1516,7 +1525,8 @@ Future<void> _persistAndPrintInner(
     // line (multi-sorteo). Use whichever applies for the multiplier lookup.
     final gameIdForLookup = l.subGameId ?? game.id;
     final override = prizeByGameId[gameIdForLookup];
-    final prize = _rescalePrize(l.amount, l.prize, override, label: l.label);
+    final prize =
+        rescaleEffectivePrize(l.amount, l.prize, override, label: l.label);
     final pairEasyPrize = _resolvePairEasyPrize(l, override);
     return CreateTicketLine(
       label: l.label,
@@ -1718,53 +1728,6 @@ class _TotalBar extends ConsumerWidget {
       ),
     );
   }
-}
-
-/// Detect whether the client-computed [existingPrize] used the game's
-/// `main` or `secondary` default and, if so, swap for the per-sucursal
-/// override. Prizes that don't match either default are returned as-is
-/// (some game types compute prize via non-linear rules we can't rescale).
-///
-/// Con `label`: si la línea es fácil de Juega3 y el label tiene pareja
-/// (ej. `121 (F)`), reemplazamos el multiplicador estándar por el par
-/// configurado en la sucursal. En fácil-pareja todas las permutaciones
-/// ganadoras son pareja, así que el pago está determinado por el label.
-int _rescalePrize(
-  int amount,
-  int existingPrize,
-  EffectiveGamePrize? o, {
-  String? label,
-}) {
-  if (o == null || amount <= 0) return existingPrize;
-
-  // Fácil-pareja: chequeo primero — sobrescribe cualquier otra lógica.
-  if (label != null) {
-    final isFacil =
-        RegExp(r'\(F\)', caseSensitive: false).hasMatch(label);
-    if (isFacil) {
-      final digits = label
-          .replaceAll(RegExp(r'\(F\)', caseSensitive: false), '')
-          .trim();
-      final hasPair = digits.isNotEmpty &&
-          digits.split('').toSet().length < digits.length;
-      if (hasPair && o.pairEasyMultiplier != null) {
-        return amount * o.pairEasyMultiplier!;
-      }
-    }
-  }
-
-  if (existingPrize % amount != 0) return existingPrize;
-  final implicit = existingPrize ~/ amount;
-
-  if (o.exactDefault != null && implicit == o.exactDefault) {
-    final target = o.exactMultiplier ?? o.exactDefault!;
-    return amount * target;
-  }
-  if (o.easyDefault != null && implicit == o.easyDefault) {
-    final target = o.easyMultiplier ?? o.easyDefault!;
-    return amount * target;
-  }
-  return existingPrize;
 }
 
 /// Snapshot del premio "par" (fácil sobre número ganador con dígitos

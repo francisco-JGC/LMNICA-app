@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/di/injection.dart';
+import '../../../sale_points/presentation/state/active_sale_point_controller.dart';
 import '../../domain/entities/effective_game_prize.dart';
 import '../../domain/repositories/game_prizes_repository.dart';
 
@@ -15,5 +16,24 @@ final effectiveGamePrizesProvider = FutureProvider.autoDispose
   return result.fold(
     (failure) => throw Exception(failure.message),
     (data) => data,
+  );
+});
+
+/// Effective multipliers for a single game at the currently active sucursal.
+/// Devuelve null si no hay sucursal seleccionada o la lista aún carga —
+/// los tiles caen al `bet.prize` con constantes hardcoded en ese caso.
+final effectiveGamePrizeForGameProvider = Provider.autoDispose
+    .family<EffectiveGamePrize?, String>((ref, gameId) {
+  final salePoint = ref.watch(activeSalePointProvider).selected;
+  if (salePoint == null) return null;
+  final async = ref.watch(effectiveGamePrizesProvider(salePoint.id));
+  return async.maybeWhen(
+    data: (list) {
+      for (final p in list) {
+        if (p.gameId == gameId) return p;
+      }
+      return null;
+    },
+    orElse: () => null,
   );
 });
