@@ -1516,7 +1516,7 @@ Future<void> _persistAndPrintInner(
     // line (multi-sorteo). Use whichever applies for the multiplier lookup.
     final gameIdForLookup = l.subGameId ?? game.id;
     final override = prizeByGameId[gameIdForLookup];
-    final prize = _rescalePrize(l.amount, l.prize, override);
+    final prize = _rescalePrize(l.amount, l.prize, override, label: l.label);
     final pairEasyPrize = _resolvePairEasyPrize(l, override);
     return CreateTicketLine(
       label: l.label,
@@ -1724,8 +1724,35 @@ class _TotalBar extends ConsumerWidget {
 /// `main` or `secondary` default and, if so, swap for the per-sucursal
 /// override. Prizes that don't match either default are returned as-is
 /// (some game types compute prize via non-linear rules we can't rescale).
-int _rescalePrize(int amount, int existingPrize, EffectiveGamePrize? o) {
+///
+/// Con `label`: si la línea es fácil de Juega3 y el label tiene pareja
+/// (ej. `121 (F)`), reemplazamos el multiplicador estándar por el par
+/// configurado en la sucursal. En fácil-pareja todas las permutaciones
+/// ganadoras son pareja, así que el pago está determinado por el label.
+int _rescalePrize(
+  int amount,
+  int existingPrize,
+  EffectiveGamePrize? o, {
+  String? label,
+}) {
   if (o == null || amount <= 0) return existingPrize;
+
+  // Fácil-pareja: chequeo primero — sobrescribe cualquier otra lógica.
+  if (label != null) {
+    final isFacil =
+        RegExp(r'\(F\)', caseSensitive: false).hasMatch(label);
+    if (isFacil) {
+      final digits = label
+          .replaceAll(RegExp(r'\(F\)', caseSensitive: false), '')
+          .trim();
+      final hasPair = digits.isNotEmpty &&
+          digits.split('').toSet().length < digits.length;
+      if (hasPair && o.pairEasyMultiplier != null) {
+        return amount * o.pairEasyMultiplier!;
+      }
+    }
+  }
+
   if (existingPrize % amount != 0) return existingPrize;
   final implicit = existingPrize ~/ amount;
 
@@ -1742,17 +1769,19 @@ int _rescalePrize(int amount, int existingPrize, EffectiveGamePrize? o) {
 
 /// Snapshot del premio "par" (fácil sobre número ganador con dígitos
 /// repetidos). Solo se llena si:
-///   1. El juego evaluado es Juega 3 (por slug — es una regla de negocio
-///      específica, no de tipo THREE_DIGIT; Gana 3 y Tresmonazo comparten
-///      tipo pero no la regla).
-///   2. La línea es fácil (sufijo `(F)` en el label, misma convención que
+///   1. La línea es fácil (sufijo `(F)` en el label, misma convención que
 ///      el backend en `TicketEvaluator`).
-///   3. La sucursal tiene `pairEasyMultiplier` efectivo no-null para ese
-///      juego.
+///   2. La config efectiva de la sucursal tiene `pairEasyMultiplier` no-null.
+///      Ese multiplicador ES el signal — el admin lo configura solo para
+///      los juegos que aplican la regla (típicamente Juega3). Antes se
+///      hardcodeaba `slug === 'juega3'` y si el slug de la DB no matcheaba
+///      (por ejemplo `juega-3`, `diaria3`, etc.), el snapshot nunca se
+///      enviaba y todos los ganadores fácil con pareja cobraban precio
+///      regular en vez del premio par.
+///
 /// Devuelve null si algún check falla; el backend cae al `prize` estándar.
 int? _resolvePairEasyPrize(_RequestLine l, EffectiveGamePrize? o) {
   if (o == null) return null;
-  if (o.gameSlug != 'juega3') return null;
   final pair = o.pairEasyMultiplier;
   if (pair == null) return null;
   final isFacil = RegExp(r'\(F\)', caseSensitive: false).hasMatch(l.label);

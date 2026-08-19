@@ -15,7 +15,20 @@ class Gana3Bet extends Equatable {
 
   String get numberLabel => number.toString().padLeft(3, '0');
   String get modeLabel => isExact ? 'Exacto' : 'Fácil';
-  int get prize => amount * (isExact ? kGana3ExactMultiplier : kGana3EasyMultiplier);
+
+  /// Label del número tiene dígitos repetidos (ej. 121, 010, 252). Solo
+  /// aplica al modo fácil, donde toda permutación ganadora hereda la
+  /// pareja del label. En fácil "sin pareja" (ej. 123) el ganador nunca
+  /// tiene pareja, así que el multiplicador estándar aplica.
+  bool get hasPair => !isExact && gana3LabelHasPair(numberLabel);
+
+  int get prize {
+    if (isExact) return amount * kGana3ExactMultiplier;
+    // Fácil con pareja en el label → siempre paga el multiplicador par,
+    // porque todas las permutaciones ganadoras posibles son pareja.
+    if (hasPair) return amount * kGana3PairEasyMultiplier;
+    return amount * kGana3EasyMultiplier;
+  }
 
   @override
   List<Object?> get props => [number, amount, isExact];
