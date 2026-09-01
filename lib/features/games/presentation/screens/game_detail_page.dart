@@ -1506,30 +1506,14 @@ Future<void> _persistAndPrintInner(
     ));
     return;
   }
-  // El check de impresora conectada solo aplica cuando el método activo la
-  // requiere. Para whatsapp no hace falta impresora — se genera imagen.
-  //
-  // CRÍTICO: en vez de confiar en el state cacheado (`printer.isConnected`),
-  // llamamos a `verifyConnectedOrReconnect` que pregunta al plugin el
-  // estado REAL del socket BT y, si dice "no", intenta reconectar. Esto
-  // ataca el escenario "state stale": el vendedor deja el teléfono ratos,
-  // el socket muere en background, el state sigue diciendo "conectado".
-  // Sin este verify, creábamos el ticket en el backend, mandábamos los
-  // bytes a un socket muerto que los buffereaba, y cuando la impresora
-  // volvía a aparearse esos bytes flusheaban → "ticket fantasma" impreso
-  // encima del que el vendedor quería sacar después.
+  // Intenta verificar/reconectar la impresora antes de imprimir para evitar
+  // bytes buffereados en un socket muerto ("ticket fantasma"). Si no hay
+  // impresora disponible la venta igual procede — se notifica al final.
+  bool printerReady = false;
   if (billingMethod == BillingMethod.bluetoothPrinter) {
-    final verified = await ref
+    printerReady = await ref
         .read(printerControllerProvider.notifier)
         .verifyConnectedOrReconnect();
-    if (!verified) {
-      messenger.showSnackBar(const SnackBar(
-        content: Text(
-          'No hay impresora conectada. Ve a Configuración → Impresora.',
-        ),
-      ));
-      return;
-    }
   }
 
   // Rescale line prizes if this sucursal has per-game overrides. We look
@@ -1612,19 +1596,19 @@ Future<void> _persistAndPrintInner(
 
   // Bifurcación por método de facturación. El ticket YA quedó persistido
   // en el backend arriba — a este punto solo cambia cómo se lo entregamos
-  // al cliente. Un fallo acá no genera duplicados porque el verify previo
-  // al createTicket ya blindó la creación (fresh reconnect: si el socket
-  // no está vivo, no se crea el ticket).
+  // al cliente. El UUID de idempotencia previene duplicados en retries.
   switch (billingMethod) {
     case BillingMethod.bluetoothPrinter:
-      await ref.read(printerControllerProvider.notifier).printTicket(payload);
-      final after = ref.read(printerControllerProvider);
-      if (after.errorMessage != null) {
-        messenger.showSnackBar(SnackBar(
-          content: Text('Ticket #${receipt.folio} registrado, pero falló la '
-              'impresión: ${after.errorMessage}'),
-        ));
-        return;
+      if (printerReady) {
+        await ref.read(printerControllerProvider.notifier).printTicket(payload);
+        final after = ref.read(printerControllerProvider);
+        if (after.errorMessage != null) {
+          messenger.showSnackBar(SnackBar(
+            content: Text('Ticket #${receipt.folio} registrado, pero falló la '
+                'impresión: ${after.errorMessage}'),
+          ));
+          return;
+        }
       }
     case BillingMethod.whatsapp:
       if (!context.mounted) return;
@@ -1647,8 +1631,12 @@ Future<void> _persistAndPrintInner(
 
   onSuccess();
   final drawTime = formatTime12h(receipt.drawAt);
+  final noPrinter = !printerReady && billingMethod == BillingMethod.bluetoothPrinter;
   messenger.showSnackBar(SnackBar(
-    content: Text('Ticket #${receipt.folio} — Sorteo $drawTime'),
+    content: Text(noPrinter
+        ? 'Ticket #${receipt.folio} — Sorteo $drawTime. Sin impresora.'
+        : 'Ticket #${receipt.folio} — Sorteo $drawTime'),
+    duration: noPrinter ? const Duration(seconds: 5) : const Duration(seconds: 4),
   ));
 }
 
