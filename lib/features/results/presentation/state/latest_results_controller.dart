@@ -81,7 +81,7 @@ class LatestResultsController extends AsyncNotifier<List<DrawResult>> {
     );
     return result.fold(
       (failure) => throw Exception(failure.message),
-      (items) => items,
+      (items) => items..sort((a, b) => a.drawAt.compareTo(b.drawAt)),
     );
   }
 }
