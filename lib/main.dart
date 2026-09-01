@@ -8,6 +8,8 @@ import 'core/navigation/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/feature_flags/presentation/state/feature_flags_controller.dart';
 import 'features/printer/presentation/state/printer_controller.dart';
+import 'features/schedules/presentation/state/available_draws_provider.dart';
+import 'features/schedules/presentation/state/game_draw_times_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -58,6 +60,14 @@ class _LoteriaClientAppState extends ConsumerState<LoteriaClientApp>
     if (state == AppLifecycleState.resumed) {
       ref.read(printerControllerProvider.notifier).autoReconnect();
       ref.read(featureFlagsControllerProvider.notifier).refresh();
+      // Los horarios/sorteos disponibles se cachean en `FutureProvider.
+      // autoDispose.family` — mientras haya observers no expiran. Si el
+      // admin cambia horarios mientras el vendedor tenía la app en
+      // background, al volver seguía viendo la lista vieja. Invalidamos
+      // ambas familias completas para forzar refresh en la próxima
+      // observación; los autoDispose limpian las huérfanas.
+      ref.invalidate(availableDrawsProvider);
+      ref.invalidate(gameDrawTimesProvider);
     }
   }
 

@@ -39,6 +39,7 @@ import '../../../sales/presentation/widgets/quick_date_bet_form.dart';
 import '../../../sales/presentation/widgets/quick_gana3_bet_form.dart';
 import '../../../sales/presentation/widgets/random_form.dart';
 import '../../../schedules/presentation/state/available_draws_provider.dart';
+import '../../../schedules/presentation/state/game_draw_times_provider.dart';
 import '../../../schedules/presentation/state/game_lock_controller.dart';
 import '../../../schedules/presentation/widgets/game_lock_gate.dart';
 import '../../../settings/domain/entities/billing_method.dart';
@@ -118,19 +119,40 @@ String _cartFingerprint({
   return '$gameId|$salePointId|${drawAt?.toIso8601String() ?? ''}|${sortedLines.join(',')}';
 }
 
-class GameDetailPage extends ConsumerWidget {
+class GameDetailPage extends ConsumerStatefulWidget {
   const GameDetailPage({required this.gameId, this.game, super.key});
 
   final String gameId;
   final Game? game;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final resolved = game;
+  ConsumerState<GameDetailPage> createState() => _GameDetailPageState();
+}
+
+class _GameDetailPageState extends ConsumerState<GameDetailPage> {
+  @override
+  void initState() {
+    super.initState();
+    // Al abrir la pantalla, forzamos re-fetch de los horarios/sorteos del
+    // backend. Sin esto, si el admin cambia un horario mientras el
+    // vendedor tiene la sesión activa, el mobile sigue mostrando el
+    // horario viejo (el `FutureProvider.autoDispose.family` cachea
+    // mientras haya observers). Invalidar en `initState` garantiza que
+    // el primer frame de esta pantalla ya trabaja con datos frescos.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.invalidate(availableDrawsProvider(widget.gameId));
+      ref.invalidate(gameDrawTimesProvider(widget.gameId));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final resolved = widget.game;
     if (resolved == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Juego')),
-        body: _NotFound(gameId: gameId),
+        body: _NotFound(gameId: widget.gameId),
       );
     }
     final child = switch (resolved.type) {
