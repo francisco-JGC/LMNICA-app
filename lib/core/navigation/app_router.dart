@@ -184,10 +184,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/juegos/:gameId',
-        builder: (context, state) => GameDetailPage(
-          gameId: state.pathParameters['gameId']!,
-          game: state.extra as Game?,
-        ),
+        builder: (context, state) {
+          final extra = state.extra;
+          final Game? game;
+          final List<({String label, int amount})> initialLines;
+          if (extra is GameDetailArgs) {
+            game = extra.game;
+            initialLines = extra.initialLines;
+          } else {
+            game = extra as Game?;
+            initialLines = const [];
+          }
+          return GameDetailPage(
+            gameId: state.pathParameters['gameId']!,
+            game: game,
+            initialLines: initialLines,
+          );
+        },
         routes: [
           GoRoute(
             path: 'escanear',

@@ -14,6 +14,7 @@ import '../../../printer/presentation/state/printer_controller.dart';
 import '../../../sale_limits/presentation/state/sale_limit_availability_provider.dart';
 import '../../../sale_limits/presentation/widgets/sale_limits_banner.dart';
 import '../../../sale_points/presentation/state/active_sale_point_controller.dart';
+import '../../../sales/domain/entities/bet.dart';
 import '../../../sales/presentation/state/cart_controller.dart';
 import '../../../sales/presentation/state/cart_state.dart';
 import '../../../sales/presentation/state/combo_cart_controller.dart';
@@ -51,6 +52,17 @@ import '../../../whatsapp_billing/presentation/services/ticket_image_share_servi
 import '../../domain/entities/game.dart';
 import '../../domain/entities/game_type.dart';
 import '../state/games_controller.dart';
+
+/// Extra object passed when navigating to `/juegos/:gameId` with pre-filled
+/// lines from a "repeat ticket" action.
+class GameDetailArgs {
+  const GameDetailArgs({this.game, this.initialLines = const []});
+
+  final Game? game;
+
+  /// Raw label+amount pairs from an existing ticket to pre-load into the cart.
+  final List<({String label, int amount})> initialLines;
+}
 
 /// True mientras un `_persistAndPrint` está en curso — desde el momento en
 /// que el botón se toca hasta que termina (o falla). Cubre la ventana entre
@@ -120,10 +132,18 @@ String _cartFingerprint({
 }
 
 class GameDetailPage extends ConsumerStatefulWidget {
-  const GameDetailPage({required this.gameId, this.game, super.key});
+  const GameDetailPage({
+    required this.gameId,
+    this.game,
+    this.initialLines = const [],
+    super.key,
+  });
 
   final String gameId;
   final Game? game;
+
+  /// Pre-fills the cart with these label+amount pairs on first render.
+  final List<({String label, int amount})> initialLines;
 
   @override
   ConsumerState<GameDetailPage> createState() => _GameDetailPageState();
@@ -133,17 +153,53 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
   @override
   void initState() {
     super.initState();
-    // Al abrir la pantalla, forzamos re-fetch de los horarios/sorteos del
-    // backend. Sin esto, si el admin cambia un horario mientras el
-    // vendedor tiene la sesión activa, el mobile sigue mostrando el
-    // horario viejo (el `FutureProvider.autoDispose.family` cachea
-    // mientras haya observers). Invalidar en `initState` garantiza que
-    // el primer frame de esta pantalla ya trabaja con datos frescos.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.invalidate(availableDrawsProvider(widget.gameId));
       ref.invalidate(gameDrawTimesProvider(widget.gameId));
+      _preloadCart();
     });
+  }
+
+  void _preloadCart() {
+    final lines = widget.initialLines;
+    final game = widget.game;
+    if (lines.isEmpty || game == null) return;
+
+    switch (game.type) {
+      case GameType.regular:
+        final bets = lines
+            .map((l) {
+              final n = int.tryParse(l.label.trim());
+              return (n != null && n >= 0 && n <= 99)
+                  ? Bet(number: n, amount: l.amount)
+                  : null;
+            })
+            .whereType<Bet>()
+            .toList();
+        if (bets.isNotEmpty) {
+          ref.read(cartControllerProvider(game.id).notifier).addBets(bets);
+        }
+      case GameType.threeDigit:
+        final ctrl = ref.read(gana3CartControllerProvider(game.id).notifier);
+        for (final l in lines) {
+          final n = int.tryParse(l.label.trim());
+          if (n != null && n >= 0 && n <= 999) {
+            ctrl.addSingle(number: n, amount: l.amount, isExact: false);
+          }
+        }
+      case GameType.fourDigit:
+        final ctrl = ref.read(comboCartControllerProvider(game.id).notifier);
+        for (final l in lines) {
+          final n = int.tryParse(l.label.trim());
+          if (n != null && n >= 0 && n <= 9999) {
+            ctrl.addSingle(number: n, amount: l.amount);
+          }
+        }
+      case GameType.date:
+      case GameType.multiSorteo:
+        break;
+    }
   }
 
   @override

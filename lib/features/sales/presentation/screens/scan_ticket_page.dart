@@ -5,6 +5,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../../core/di/injection.dart';
 import '../../../games/domain/entities/game.dart';
 import '../../../games/domain/entities/game_type.dart';
+import '../../../games/presentation/state/games_controller.dart';
 import '../../../tickets/domain/entities/ticket_detail.dart';
 import '../../../tickets/domain/repositories/tickets_repository.dart';
 import '../../domain/entities/bet.dart';
@@ -117,12 +118,28 @@ class _ScanTicketPageState extends ConsumerState<ScanTicketPage>
         });
       },
       (detail) async {
+        // Comprobamos compatibilidad por tipo de juego (misma cantidad de
+        // dígitos), no por gameId exacto. Así un boleto de "La Tica" puede
+        // cargarse en "Diaria" si ambos son GameType.regular.
         if (detail.summary.gameId != widget.game.id) {
-          setState(() {
-            _busy = false;
-            _error = 'Este boleto es de otro juego';
-          });
-          return;
+          final allGames =
+              ref.read(gamesControllerProvider).value ?? const [];
+          final scannedType = allGames
+              .where((g) => g.id == detail.summary.gameId)
+              .map((g) => g.type)
+              .firstOrNull;
+          final compatible = scannedType != null &&
+              scannedType == widget.game.type &&
+              scannedType != GameType.multiSorteo;
+          if (!compatible) {
+            setState(() {
+              _busy = false;
+              _error = scannedType == null
+                  ? 'Este boleto es de otro juego'
+                  : 'Este boleto no es compatible con este juego';
+            });
+            return;
+          }
         }
         if (widget.game.type == GameType.multiSorteo) {
           setState(() {

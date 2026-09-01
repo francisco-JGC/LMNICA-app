@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/utils/currency.dart';
 import '../../../../core/utils/time_format.dart';
 import '../../../games/domain/entities/game.dart';
+import '../../../games/presentation/screens/game_detail_page.dart';
 import '../../../games/presentation/state/games_controller.dart';
 import '../../domain/entities/ticket_detail.dart';
 import '../../domain/entities/ticket_summary.dart';
@@ -15,14 +17,88 @@ class TicketDetailPage extends ConsumerWidget {
 
   final String ticketId;
 
+  void _showRepeatSheet(
+    BuildContext context,
+    Game currentGame,
+    TicketDetail detail,
+    List<Game> allGames,
+  ) {
+    final compatible = allGames
+        .where((g) => g.type == currentGame.type && g.id != currentGame.id)
+        .toList();
+
+    if (compatible.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay otros juegos compatibles para repetir'),
+        ),
+      );
+      return;
+    }
+
+    final lines = detail.lines
+        .map((l) => (label: l.label.trim(), amount: l.amount))
+        .toList();
+
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                'Repetir en',
+                style: Theme.of(sheetCtx).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            ...compatible.map(
+              (g) => ListTile(
+                leading: const Icon(Icons.casino_outlined),
+                title: Text(g.name),
+                onTap: () {
+                  Navigator.of(sheetCtx).pop();
+                  context.push(
+                    '/juegos/${g.id}',
+                    extra: GameDetailArgs(game: g, initialLines: lines),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(ticketDetailProvider(ticketId));
     final games = ref.watch(gamesControllerProvider).value ?? const [];
     final gamesById = {for (final g in games) g.id: g};
 
+    final loadedDetail = async.value;
+    final loadedGame =
+        loadedDetail != null ? gamesById[loadedDetail.summary.gameId] : null;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Detalle del boleto')),
+      appBar: AppBar(
+        title: const Text('Detalle del boleto'),
+        actions: loadedGame != null && loadedDetail != null
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.replay),
+                  tooltip: 'Repetir boleto',
+                  onPressed: () =>
+                      _showRepeatSheet(context, loadedGame, loadedDetail, games),
+                ),
+              ]
+            : null,
+      ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => _ErrorView(
