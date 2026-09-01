@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
 import '../../../../core/utils/currency.dart';
+import '../../../../core/utils/printer_text.dart';
 import '../../domain/entities/ticket_payload.dart';
 import '../models/printer_device_model.dart';
 
@@ -184,20 +185,30 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
     );
     PosColumn gutter() => PosColumn(text: '', width: 1);
 
+    // Sanitizamos campos alimentados por el usuario (nombre del vendedor,
+    // cliente, footer) porque el codec ESC/POS rechaza codepoints fuera
+    // del codepage (emojis, símbolos raros) con `ArgumentError: Contains
+    // invalid characters` y toda la impresión falla. Ver
+    // `printer_text.dart` para el detalle.
+    final seller = sanitizeForPrinter(p.seller);
+    final client = sanitizeForPrinter(p.client);
+    final gameName = sanitizeForPrinter(p.gameName);
+    final footer = sanitizeForPrinter(p.footer);
+
     return [
       ...g.reset(),
       ...g.setStyles(const PosStyles(align: PosAlign.left)),
       ...g.text('  Folio: ${p.folio}', styles: infoStyle),
       ...g.text('  Fecha: ${formatDateTime(p.date)}', styles: infoStyle),
       ...g.text(
-        '  Sorteo: ${p.gameName}'
+        '  Sorteo: $gameName'
         '${p.drawAt != null ? ' - ${formatDrawHint(p.drawAt!)}' : ''}',
         styles: infoStyle,
       ),
-      if (p.seller != null)
-        ...g.text('  Vendedor: ${p.seller}', styles: infoStyle),
-      if (p.client != null)
-        ...g.text('  Cliente: ${p.client}', styles: infoStyle),
+      if (seller.isNotEmpty)
+        ...g.text('  Vendedor: $seller', styles: infoStyle),
+      if (client.isNotEmpty)
+        ...g.text('  Cliente: $client', styles: infoStyle),
       ...g.hr(),
       ...g.row([
         gutter(),
@@ -212,7 +223,7 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
                 p.lines[i - 1].subGameName != p.lines[i].subGameName)) ...[
           if (i > 0) ...g.feed(1),
           ...g.text(
-            '  -- ${p.lines[i].subGameName!.toUpperCase()} --',
+            '  -- ${sanitizeForPrinter(p.lines[i].subGameName).toUpperCase()} --',
             styles: const PosStyles(bold: true),
           ),
         ],
@@ -257,9 +268,9 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
         styles: const PosStyles(align: PosAlign.center),
       ),
       ..._safeQrCode(g, p.toQrData(), moduleSize: 4),
-      if (p.footer != null)
+      if (footer.isNotEmpty)
         ...g.text(
-          '  ${p.footer}  ',
+          '  $footer  ',
           styles: const PosStyles(align: PosAlign.center, bold: true),
         ),
       ...g.emptyLines(2),
