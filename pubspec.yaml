@@ -1,7 +1,7 @@
 name: loteria_client_app
 description: "LM NICA — aplicación móvil para vendedores (Flutter + Dart)."
 publish_to: 'none'
-version: 1.3.7+21
+version: 1.3.8+22
 
 environment:
   sdk: ^3.12.2
