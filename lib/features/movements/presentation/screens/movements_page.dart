@@ -68,6 +68,7 @@ class _DetailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isPositive = summary.remaining >= 0;
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: Container(
@@ -84,6 +85,7 @@ class _DetailCard extends StatelessWidget {
         ),
         child: Column(
           children: [
+            // Header
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -110,20 +112,56 @@ class _DetailCard extends StatelessWidget {
                 ],
               ),
             ),
-            _Row(label: 'Facturado', value: summary.billed),
+            // Rows
+            _Row(label: 'Facturado', value: summary.billed, tone: _Tone.green),
             const _Divider(),
-            _Row(label: 'Ganado por clientes', value: summary.wonPrize),
+            _Row(label: 'Premios ganados por clientes', value: summary.wonPrize, tone: _Tone.red),
             const _Divider(),
-            _Row(label: 'Cobrado', value: summary.collected),
-            const _Divider(),
-            _Row(label: 'Gastos', value: summary.expenses),
-            const _Divider(),
-            _Row(label: 'Salario', value: summary.salary),
-            const _Divider(),
-            _Row(
-              label: 'Restante',
-              value: summary.remaining,
-              isTotal: true,
+            _Row(label: 'Salario / Comisión', value: summary.salary, tone: _Tone.neutral),
+            if (summary.cobros > 0) ...[
+              const _Divider(),
+              _Row(label: 'Cobrado', value: summary.cobros, tone: _Tone.green),
+            ],
+            if (summary.credits > 0) ...[
+              const _Divider(),
+              _Row(label: 'Créditos', value: summary.credits, tone: _Tone.red),
+            ],
+            if (summary.prizePayments > 0) ...[
+              const _Divider(),
+              _Row(label: 'Premios pagados', value: summary.prizePayments, tone: _Tone.neutral),
+            ],
+            // Restante
+            Container(
+              color: isPositive
+                  ? const Color(0xFFECFDF5)
+                  : const Color(0xFFFFF1F2),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Pendiente',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: isPositive
+                            ? const Color(0xFF065F46)
+                            : const Color(0xFF9F1239),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    kCurrencyFormat.format(summary.remaining),
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: isPositive
+                          ? const Color(0xFF059669)
+                          : const Color(0xFFE11D48),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -132,38 +170,49 @@ class _DetailCard extends StatelessWidget {
   }
 }
 
+enum _Tone { green, red, neutral }
+
 class _Row extends StatelessWidget {
   const _Row({
     required this.label,
     required this.value,
-    this.isTotal = false,
+    this.tone = _Tone.neutral,
   });
 
   final String label;
   final int value;
-  final bool isTotal;
+  final _Tone tone;
 
   @override
   Widget build(BuildContext context) {
-    final labelStyle = TextStyle(
-      fontSize: isTotal ? 16 : 15,
-      fontWeight: isTotal ? FontWeight.w800 : FontWeight.w500,
-      color: isTotal ? Colors.black87 : Colors.grey.shade800,
-    );
-    final valueStyle = TextStyle(
-      fontSize: isTotal ? 18 : 16,
-      fontWeight: FontWeight.w800,
-      color: isTotal
-          ? (value < 0 ? Colors.red.shade700 : AppTheme.primary)
-          : Colors.black87,
-    );
+    final Color valueColor = switch (tone) {
+      _Tone.green => const Color(0xFF059669),
+      _Tone.red => const Color(0xFFE11D48),
+      _Tone.neutral => Colors.black87,
+    };
     return Container(
-      color: isTotal ? AppTheme.accentSoft : Colors.white,
+      color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       child: Row(
         children: [
-          Expanded(child: Text(label, style: labelStyle)),
-          Text(kCurrencyFormat.format(value), style: valueStyle),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey.shade800,
+              ),
+            ),
+          ),
+          Text(
+            kCurrencyFormat.format(value),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: valueColor,
+            ),
+          ),
         ],
       ),
     );

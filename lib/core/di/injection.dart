@@ -23,6 +23,9 @@ import '../../features/games/data/datasources/games_remote_datasource.dart';
 import '../../features/games/data/repositories/games_repository_impl.dart';
 import '../../features/games/domain/repositories/games_repository.dart';
 import '../../features/games/domain/usecases/get_authorized_games.dart';
+import '../../features/movements/data/datasources/movements_remote_datasource.dart';
+import '../../features/movements/data/repositories/movements_repository_impl.dart';
+import '../../features/movements/domain/repositories/movements_repository.dart';
 import '../../features/lucky/data/datasources/lucky_remote_datasource.dart';
 import '../../features/lucky/data/repositories/lucky_repository_impl.dart';
 import '../../features/lucky/domain/repositories/lucky_repository.dart';
@@ -108,6 +111,7 @@ Future<void> configureDependencies() async {
   _registerSalePointsFeature();
   _registerSchedulesFeature();
   _registerTicketsFeature();
+  _registerMovementsFeature();
   _registerResultsFeature();
   _registerSaleLimitsFeature();
   _registerGamePrizesFeature();
@@ -202,6 +206,16 @@ void _registerTicketsFeature() {
     )
     ..registerFactory<VoidMyTicket>(
       () => VoidMyTicket(repository: getIt()),
+    );
+}
+
+void _registerMovementsFeature() {
+  getIt
+    ..registerLazySingleton<MovementsRemoteDatasource>(
+      () => MovementsRemoteDatasourceImpl(client: getIt()),
+    )
+    ..registerLazySingleton<MovementsRepository>(
+      () => MovementsRepositoryImpl(remote: getIt()),
     );
 }
 

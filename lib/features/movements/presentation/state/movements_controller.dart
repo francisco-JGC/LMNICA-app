@@ -6,6 +6,7 @@ import '../../../sale_points/presentation/state/active_sale_point_controller.dar
 import '../../../tickets/domain/entities/tickets_summary.dart';
 import '../../../tickets/domain/repositories/tickets_repository.dart';
 import '../../domain/entities/movements_summary.dart';
+import '../../domain/repositories/movements_repository.dart';
 
 class MovementsFilters extends Equatable {
   const MovementsFilters({required this.from, required this.to});
@@ -38,6 +39,7 @@ final movementsFiltersProvider = NotifierProvider<
 
 class MovementsController extends AsyncNotifier<MovementsSummary> {
   late final _tickets = getIt<TicketsRepository>();
+  late final _movements = getIt<MovementsRepository>();
 
   @override
   Future<MovementsSummary> build() async {
@@ -57,26 +59,34 @@ class MovementsController extends AsyncNotifier<MovementsSummary> {
     if (salePoint == null) return MovementsSummary.empty;
     final filters = ref.read(movementsFiltersProvider);
 
-    // Single aggregate call — the server sums `total` and `paid_prize` in
-    // one query, so a busy puesto no longer bumps into pagination limits.
-    final result = await _tickets.summary(TicketsSummaryQuery(
+    final ticketsResult = await _tickets.summary(TicketsSummaryQuery(
       salePointId: salePoint.id,
       from: filters.from,
       to: filters.to,
     ));
-    return result.fold(
+
+    final balanceResult = await _movements.sellerBalance(SellerBalanceQuery(
+      salePointId: salePoint.id,
+      from: filters.from,
+      to: filters.to,
+    ));
+
+    final ticketsSummary = ticketsResult.fold(
       (failure) => throw Exception(failure.message),
-      (s) => MovementsSummary(
-        billed: s.billed,
-        // For now: collected == billed (no separate credit tracking yet).
-        collected: s.billed,
-        wonPrize: s.wonPrize,
-        // Expenses will come from a future module; leave as 0.
-        expenses: 0,
-        // Server-computed commission. Falls back to 0 when the seller has
-        // no `paymentPercentage` configured yet.
-        salary: s.salary ?? 0,
-      ),
+      (s) => s,
+    );
+
+    final balance = balanceResult.getOrElse(
+      (_) => (cobros: 0, credits: 0, prizePayments: 0),
+    );
+
+    return MovementsSummary(
+      billed: ticketsSummary.billed,
+      wonPrize: ticketsSummary.wonPrize,
+      salary: ticketsSummary.salary ?? 0,
+      cobros: balance.cobros,
+      credits: balance.credits,
+      prizePayments: balance.prizePayments,
     );
   }
 }
