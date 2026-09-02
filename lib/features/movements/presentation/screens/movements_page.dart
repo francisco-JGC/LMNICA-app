@@ -20,8 +20,6 @@ const _typeOptions = [
   ('expense', 'Gasto'),
   ('deposit', 'Depósito / Cobro'),
   ('withdrawal', 'Retiro / Crédito'),
-  ('opening', 'Apertura de caja'),
-  ('closing', 'Cierre de caja'),
   ('adjustment', 'Ajuste'),
 ];
 
