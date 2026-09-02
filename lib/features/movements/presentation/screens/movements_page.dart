@@ -44,11 +44,18 @@ final _occurredFmt = DateFormat('dd MMM yyyy', 'es');
 // Page
 // ---------------------------------------------------------------------------
 
-class MovementsPage extends ConsumerWidget {
+class MovementsPage extends ConsumerStatefulWidget {
   const MovementsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MovementsPage> createState() => _MovementsPageState();
+}
+
+class _MovementsPageState extends ConsumerState<MovementsPage> {
+  bool _showSalary = false;
+
+  @override
+  Widget build(BuildContext context) {
     final summaryState = ref.watch(movementsControllerProvider);
     final historyState = ref.watch(movementsHistoryProvider);
     final filters = ref.watch(movementsFiltersProvider);
@@ -83,7 +90,34 @@ class MovementsPage extends ConsumerWidget {
                   .read(movementsFiltersProvider.notifier)
                   .setRange(from, to),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
+            // Checkbox mostrar salario
+            InkWell(
+              onTap: () => setState(() => _showSalary = !_showSalary),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: Checkbox(
+                        value: _showSalary,
+                        onChanged: (v) => setState(() => _showSalary = v ?? false),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Mostrar salario / comisión',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
             // Resumen
             summaryState.when(
               loading: () => const Padding(
@@ -95,7 +129,7 @@ class MovementsPage extends ConsumerWidget {
                 onRetry: () =>
                     ref.read(movementsControllerProvider.notifier).refresh(),
               ),
-              data: (summary) => _DetailCard(summary: summary),
+              data: (summary) => _DetailCard(summary: summary, showSalary: _showSalary),
             ),
             const SizedBox(height: 24),
             // Historial
@@ -370,13 +404,16 @@ class _EmptyHistory extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _DetailCard extends StatelessWidget {
-  const _DetailCard({required this.summary});
+  const _DetailCard({required this.summary, required this.showSalary});
 
   final MovementsSummary summary;
+  final bool showSalary;
 
   @override
   Widget build(BuildContext context) {
-    final isPositive = summary.remaining >= 0;
+    final effectiveRemaining =
+        showSalary ? summary.remaining : summary.remaining + summary.salary;
+    final isPositive = effectiveRemaining >= 0;
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: Container(
@@ -422,8 +459,10 @@ class _DetailCard extends StatelessWidget {
             _Row(label: 'Facturado', value: summary.billed, tone: _Tone.green),
             const _Divider(),
             _Row(label: 'Premios ganados por clientes', value: summary.wonPrize, tone: _Tone.red),
-            const _Divider(),
-            _Row(label: 'Salario / Comisión', value: summary.salary, tone: _Tone.neutral),
+            if (showSalary) ...[
+              const _Divider(),
+              _Row(label: 'Salario / Comisión', value: summary.salary, tone: _Tone.neutral),
+            ],
             if (summary.cobros > 0) ...[
               const _Divider(),
               _Row(label: 'Cobrado', value: summary.cobros, tone: _Tone.green),
@@ -456,7 +495,7 @@ class _DetailCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    kCurrencyFormat.format(summary.remaining),
+                    kCurrencyFormat.format(effectiveRemaining),
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w900,
