@@ -17,6 +17,13 @@ class MovementsRepositoryImpl implements MovementsRepository {
     return _guard(() => remote.sellerBalance(query));
   }
 
+  @override
+  Future<Either<Failure, MovementsList>> listMovements(
+    ListMovementsQuery query,
+  ) {
+    return _guard(() => remote.listMovements(query));
+  }
+
   Future<Either<Failure, T>> _guard<T>(Future<T> Function() call) async {
     try {
       return Right(await call());

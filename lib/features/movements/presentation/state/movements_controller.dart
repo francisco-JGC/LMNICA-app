@@ -9,13 +9,19 @@ import '../../domain/entities/movements_summary.dart';
 import '../../domain/repositories/movements_repository.dart';
 
 class MovementsFilters extends Equatable {
-  const MovementsFilters({required this.from, required this.to});
+  const MovementsFilters({
+    required this.from,
+    required this.to,
+    this.historyType,
+  });
 
   final DateTime from;
   final DateTime to;
+  /// null = todos los tipos
+  final String? historyType;
 
   @override
-  List<Object?> get props => [from, to];
+  List<Object?> get props => [from, to, historyType];
 }
 
 class MovementsFiltersNotifier extends Notifier<MovementsFilters> {
@@ -28,7 +34,11 @@ class MovementsFiltersNotifier extends Notifier<MovementsFilters> {
   }
 
   void setRange(DateTime from, DateTime to) {
-    state = MovementsFilters(from: from, to: to);
+    state = MovementsFilters(from: from, to: to, historyType: state.historyType);
+  }
+
+  void setHistoryType(String? type) {
+    state = MovementsFilters(from: state.from, to: state.to, historyType: type);
   }
 }
 
@@ -93,3 +103,48 @@ class MovementsController extends AsyncNotifier<MovementsSummary> {
 
 final movementsControllerProvider = AsyncNotifierProvider<
     MovementsController, MovementsSummary>(MovementsController.new);
+
+// ---------------------------------------------------------------------------
+// Historial de movimientos
+// ---------------------------------------------------------------------------
+
+class MovementsHistoryController
+    extends AsyncNotifier<MovementsList> {
+  late final _repo = getIt<MovementsRepository>();
+
+  @override
+  Future<MovementsList> build() {
+    ref.listen(movementsFiltersProvider, (previous, next) {
+      if (previous != next) refresh();
+    });
+    return _fetch();
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(_fetch);
+  }
+
+  Future<MovementsList> _fetch() async {
+    final salePoint = ref.read(activeSalePointProvider).selected;
+    if (salePoint == null) return (items: const <MovementItem>[], total: 0);
+    final filters = ref.read(movementsFiltersProvider);
+
+    final result = await _repo.listMovements(ListMovementsQuery(
+      salePointId: salePoint.id,
+      type: filters.historyType,
+      from: filters.from,
+      to: filters.to,
+    ));
+
+    return result.fold(
+      (failure) => throw Exception(failure.message),
+      (data) => data,
+    );
+  }
+}
+
+final movementsHistoryProvider =
+    AsyncNotifierProvider<MovementsHistoryController, MovementsList>(
+  MovementsHistoryController.new,
+);
