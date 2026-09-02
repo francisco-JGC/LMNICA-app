@@ -182,15 +182,10 @@ class GameLockController extends Notifier<GameLockState> {
           hour: t.hour,
           minute: t.minute,
         );
-        // Espeja la semántica del backend en `resolve-next-draw.use-case.ts`:
-        // el minuto en que arranca el cutoff sigue siendo válido (backend
-        // usa `<=` en granularidad de minutos). Por eso restamos
-        // `cutoffMinutes - 1` en vez de `cutoffMinutes`: la UI se bloquea
-        // recién al empezar el próximo minuto. Sin esto, el móvil mostraría
-        // "Sorteo en curso" mientras el backend seguiría aceptando ventas.
-        // `max(0, ...)` protege contra un cutoff configurado en 0.
-        final effectiveCutoff =
-            s.cutoffMinutes > 0 ? s.cutoffMinutes - 1 : 0;
+        // El backend usa `<` estricto: el minuto exacto del cutoff ya está
+        // bloqueado. La UI refleja la misma semántica — lockStart es exactamente
+        // drawAt - cutoffMinutes, sin ajuste.
+        final effectiveCutoff = s.cutoffMinutes;
         final lockStart =
             drawAt.subtract(Duration(minutes: effectiveCutoff));
         final lockEnd =
