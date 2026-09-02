@@ -10,6 +10,7 @@ import '../../../../core/utils/time_format.dart';
 import '../../../../core/widgets/date_range_field.dart';
 import '../../../../core/widgets/game_draw_filter_bar.dart';
 import '../../../games/domain/entities/game.dart';
+import '../../../games/presentation/screens/game_detail_page.dart';
 import '../../../games/presentation/state/games_controller.dart';
 import '../../../printer/domain/entities/ticket_payload.dart' as printer;
 import '../../../printer/presentation/state/printer_controller.dart';
@@ -316,6 +317,8 @@ class _TicketMenu extends ConsumerWidget {
       icon: const Icon(Icons.more_vert),
       onSelected: (value) async {
         switch (value) {
+          case 'repeat':
+            await _repeat(context, ref);
           case 'reprint':
             await _reprint(context, ref);
           case 'resend':
@@ -325,6 +328,13 @@ class _TicketMenu extends ConsumerWidget {
         }
       },
       itemBuilder: (context) => [
+        const PopupMenuItem(
+          value: 'repeat',
+          child: ListTile(
+            leading: Icon(Icons.replay),
+            title: Text('Repetir boleto'),
+          ),
+        ),
         const PopupMenuItem(
           value: 'reprint',
           child: ListTile(
@@ -348,6 +358,85 @@ class _TicketMenu extends ConsumerWidget {
             ),
           ),
       ],
+    );
+  }
+
+  Future<void> _repeat(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final currentGame = game;
+    if (currentGame == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('No se encontró el juego del boleto')),
+      );
+      return;
+    }
+
+    final either = await getIt<TicketsRepository>().findById(ticket.id);
+    if (!context.mounted) return;
+
+    await either.match(
+      (failure) async {
+        messenger.showSnackBar(SnackBar(
+          content: Text('No se pudo cargar el boleto: ${failure.message}'),
+        ));
+      },
+      (detail) async {
+        final allGames = ref.read(gamesControllerProvider).value ?? const [];
+        final compatible = allGames
+            .where((g) => g.type == currentGame.type && g.id != currentGame.id)
+            .toList();
+
+        if (!context.mounted) return;
+
+        if (compatible.isEmpty) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('No hay otros juegos compatibles para repetir'),
+            ),
+          );
+          return;
+        }
+
+        final lines = detail.lines
+            .map((l) => (label: l.label.trim(), amount: l.amount))
+            .toList();
+
+        await showModalBottomSheet<void>(
+          context: context,
+          builder: (sheetCtx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Text(
+                    'Repetir en',
+                    style: Theme.of(sheetCtx)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                ...compatible.map(
+                  (g) => ListTile(
+                    leading: const Icon(Icons.casino_outlined),
+                    title: Text(g.name),
+                    onTap: () {
+                      Navigator.of(sheetCtx).pop();
+                      context.push(
+                        '/juegos/${g.id}',
+                        extra: GameDetailArgs(game: g, initialLines: lines),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
