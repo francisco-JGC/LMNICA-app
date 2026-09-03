@@ -196,7 +196,7 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
     final footer = sanitizeForPrinter(p.footer);
 
     return [
-      ...g.reset(),
+      ...g.clearStyle(),
       ...g.setStyles(const PosStyles(align: PosAlign.left)),
       ...g.text('  Folio: ${p.folio}', styles: infoStyle),
       ...g.text('  Fecha: ${formatDateTime(p.date)}', styles: infoStyle),
@@ -273,7 +273,7 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
           '  $footer  ',
           styles: const PosStyles(align: PosAlign.center, bold: true),
         ),
-      ...g.emptyLines(2),
+      ...g.emptyLines(1),
       // GS V 0: full cut without the extra 5-line feed that g.cut() adds.
       0x1D, 0x56, 0x00,
     ];
