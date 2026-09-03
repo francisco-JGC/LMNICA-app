@@ -153,15 +153,16 @@ class _HeaderStats extends StatelessWidget {
           Container(width: 1, height: 34, color: Colors.white24),
           Expanded(
             child: _HeaderStat(
-              label: 'Boletos',
-              value: '${totals.ticketCount}',
+              label: 'Ventas',
+              value: kCurrencyFormat.format(totals.billed),
+              small: true,
             ),
           ),
           Container(width: 1, height: 34, color: Colors.white24),
           Expanded(
             child: _HeaderStat(
-              label: 'Ventas',
-              value: kCurrencyFormat.format(totals.billed),
+              label: 'Premios',
+              value: kCurrencyFormat.format(totals.wonPrize),
               small: true,
             ),
           ),
@@ -268,7 +269,7 @@ class _DrawCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final timeFmt = DateFormat('h:mm a', 'en_US');
-    final drawTime = timeFmt.format(item.drawAt).toLowerCase();
+    final drawTime = timeFmt.format(item.drawAt.toLocal()).toLowerCase();
     final hasWinner = item.winningNumber != null;
 
     return Container(
@@ -355,22 +356,11 @@ class _DrawCard extends StatelessWidget {
               Container(width: 1, height: 32, color: Colors.grey.shade200),
               Expanded(
                 child: _StatCell(
-                  label: 'Ganado',
+                  label: 'Premios',
                   value: kCurrencyFormat.format(item.wonPrize),
                   color: item.wonPrize > 0
                       ? Colors.red.shade700
                       : Colors.grey.shade500,
-                ),
-              ),
-              Container(width: 1, height: 32, color: Colors.grey.shade200),
-              Expanded(
-                child: _StatCell(
-                  label: 'Boletos',
-                  value: '${item.ticketCount}',
-                  color: Colors.black87,
-                  hint: item.voidedCount > 0
-                      ? '${item.voidedCount} anulado${item.voidedCount == 1 ? '' : 's'}'
-                      : null,
                 ),
               ),
             ],
@@ -431,13 +421,11 @@ class _StatCell extends StatelessWidget {
     required this.label,
     required this.value,
     required this.color,
-    this.hint,
   });
 
   final String label;
   final String value;
   final Color color;
-  final String? hint;
 
   @override
   Widget build(BuildContext context) {
@@ -468,16 +456,6 @@ class _StatCell extends StatelessWidget {
               ),
             ),
           ),
-          if (hint != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              hint!,
-              style: TextStyle(
-                fontSize: 10,
-                color: Colors.grey.shade600,
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -583,7 +561,7 @@ List<_DayGroup> _groupByDay(List<TicketsByDrawItem> items) {
   for (final key in sortedKeys) {
     final list = map[key]!;
     list.sort((a, b) => b.drawAt.compareTo(a.drawAt));
-    groups.add(_DayGroup(label: _labelForDay(list.first.drawAt), items: list));
+    groups.add(_DayGroup(label: _labelForDay(list.first.drawAt.toLocal()), items: list));
   }
   return groups;
 }
