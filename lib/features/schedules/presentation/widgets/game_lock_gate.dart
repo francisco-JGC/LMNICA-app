@@ -40,6 +40,7 @@ class _LockOverlay extends StatelessWidget {
     final reopenAt = state.reopenAt;
     final nextDrawAt = state.nextDrawAt;
     final nightly = state.isNightly;
+    final dayLock = state.isDayLock;
     return Positioned.fill(
       child: ColoredBox(
         color: const Color(0xB2000000),
@@ -56,20 +57,32 @@ class _LockOverlay extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    nightly ? Icons.nights_stay : Icons.lock_clock,
+                    dayLock
+                        ? Icons.calendar_today
+                        : nightly
+                            ? Icons.nights_stay
+                            : Icons.lock_clock,
                     size: 56,
-                    color: nightly ? Colors.indigo : Colors.orange,
+                    color: dayLock
+                        ? Colors.blueGrey
+                        : nightly
+                            ? Colors.indigo
+                            : Colors.orange,
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    nightly ? 'Cierre nocturno' : 'Sorteo en curso',
+                    dayLock
+                        ? 'Sin sorteo hoy'
+                        : nightly
+                            ? 'Cierre nocturno'
+                            : 'Sorteo en curso',
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 12),
-                  if (!nightly && drawAt != null)
+                  if (!nightly && !dayLock && drawAt != null)
                     Text(
                       'Sorteo de las ${formatTime12h(drawAt)}',
                       style: const TextStyle(fontSize: 15),
@@ -77,21 +90,26 @@ class _LockOverlay extends StatelessWidget {
                     ),
                   const SizedBox(height: 8),
                   Text(
-                    nightly
-                        ? 'Las ventas están cerradas hasta mañana a las 6:00 AM.'
-                        : 'No se pueden ingresar boletos durante la ventana de bloqueo.',
+                    dayLock
+                        ? 'Este juego no tiene sorteos programados para hoy.'
+                        : nightly
+                            ? 'Las ventas están cerradas hasta mañana a las 6:00 AM.'
+                            : 'No se pueden ingresar boletos durante la ventana de bloqueo.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.black87),
                   ),
                   const SizedBox(height: 16),
                   if (reopenAt != null)
-                    _CountdownText(target: reopenAt, longFormat: nightly),
+                    _CountdownText(
+                        target: reopenAt, longFormat: nightly || dayLock),
                   const SizedBox(height: 16),
                   if (nextDrawAt != null)
                     Text(
-                      nightly
-                          ? 'Próximo sorteo del siguiente día: ${formatTime12h(nextDrawAt)}'
-                          : 'Próximo sorteo: ${formatTime12h(nextDrawAt)}',
+                      dayLock
+                          ? 'Próximo sorteo: ${formatTime12h(nextDrawAt)}'
+                          : nightly
+                              ? 'Próximo sorteo del siguiente día: ${formatTime12h(nextDrawAt)}'
+                              : 'Próximo sorteo: ${formatTime12h(nextDrawAt)}',
                       style: TextStyle(
                         color: Colors.grey.shade700,
                         fontSize: 13,

@@ -26,6 +26,7 @@ class GameLockState extends Equatable {
     this.nextDrawAt,
     this.nextCutoffMinutes,
     this.isNightly = false,
+    this.isDayLock = false,
     this.errorMessage,
   });
 
@@ -44,6 +45,11 @@ class GameLockState extends Equatable {
   /// a un `currentDrawAt`.
   final bool isNightly;
 
+  /// True cuando el juego tiene schedules solo para días específicos y hoy
+  /// no es uno de esos días. Las ventas se bloquean hasta el próximo día
+  /// con sorteo programado.
+  final bool isDayLock;
+
   final String? errorMessage;
 
   bool get isLocked => status == GameLockStatus.locked;
@@ -58,6 +64,7 @@ class GameLockState extends Equatable {
         nextDrawAt,
         nextCutoffMinutes,
         isNightly,
+        isDayLock,
         errorMessage,
       ];
 }
@@ -111,6 +118,27 @@ class GameLockController extends Notifier<GameLockState> {
     }
 
     final now = DateTime.now().toUtc();
+
+    // Si todos los schedules están anclados a días específicos (ninguno es
+    // "todos los días") y hoy no es uno de esos días, bloqueamos el juego
+    // hasta el próximo sorteo programado — igual que el backend.
+    final allDaySpecific = schedules.every((s) => s.dayOfWeek != null);
+    final todayWeekday =
+        BusinessTime.nowInBusinessTz().weekday % 7; // 0=dom … 6=sáb
+    if (allDaySpecific && !schedules.any((s) => s.appliesTo(todayWeekday))) {
+      final windows = _buildWindows(schedules, now);
+      final next =
+          windows.where((w) => !w.isNightly).fold<_Window?>(null, (acc, w) => acc ?? w);
+      state = GameLockState(
+        status: GameLockStatus.locked,
+        isDayLock: true,
+        reopenAt: next?.lockStart,
+        nextDrawAt: next?.drawAt,
+        nextCutoffMinutes: next?.cutoffMinutes,
+      );
+      return;
+    }
+
     final windows = _buildWindows(schedules, now);
 
     for (final w in windows) {
