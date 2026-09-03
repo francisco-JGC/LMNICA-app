@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -11,105 +9,26 @@ import 'printer_state.dart';
 
 enum _PermissionOutcome { granted, denied, permanentlyDenied }
 
-// NOTE: we do NOT poll the printer's connection status via probe writes.
-// Cheap SPP thermal printers interpret the probe bytes as raw data and
-// slowly feed paper. Print failures surface a broken socket lazily.
-// El polling adaptativo de RECONNECT (abajo) es distinto: no toca la
-// impresora, solo revisa el flag `bluetoothEnabled` del sistema y reintenta
-// conectar si volvió a estar disponible.
-
-/// Cada cuánto reintenta autoReconnect cuando la impresora está
-/// desconectada. 4s es agresivo pero necesario: el vendedor típico
-/// prende la impresora DESPUÉS de haber abierto la app, y con 8s la
-/// espera se sentía eterna. El datasource ya tiene timeouts para que
-/// un intento fallido libere el guard rápido (`_isReconnecting`) y el
-/// siguiente tick pueda pegarle en cuanto la impresora vuelva.
-const _kReconnectPollInterval = Duration(seconds: 4);
+// Modelo connect-to-print: no se mantiene un socket BT persistente.
+// Cada llamada a printTicket / printTest abre la conexión, imprime y
+// la cierra en el datasource. Esto permite que múltiples dispositivos
+// compartan la misma impresora sin conflictos de socket.
 
 class PrinterController extends Notifier<PrinterState> {
   late final _repository = getIt<PrinterRepository>();
-  Timer? _reconnectTimer;
-
-  /// Evita que dos autoReconnect corran solapados: el `connect()` de BT
-  /// puede tardar 5-15s en fallar y nuestro tick es cada 8s, así que sin
-  /// esta guarda podríamos apilar intentos y pisarnos el estado.
-  bool _isReconnecting = false;
 
   @override
   PrinterState build() {
-    // Timer siempre corre autoReconnect — dentro decide qué hacer según el
-    // estado real del plugin. La diferencia con el diseño anterior es que
-    // no confiamos en `state.isConnected` como gate: si el estado dice
-    // "conectado" pero el plugin dice que no (típico después de logout,
-    // background largo, o BT toggle), autoReconnect detecta el desajuste
-    // y reintenta. Antes ese caso quedaba varado hasta que el usuario
-    // apretaba imprimir y fallaba.
-    _reconnectTimer = Timer.periodic(_kReconnectPollInterval, (_) {
-      autoReconnect();
-    });
-    ref.onDispose(() {
-      _reconnectTimer?.cancel();
-      _reconnectTimer = null;
-    });
+    // Carga la impresora configurada desde storage local sin bloquear el UI.
+    Future.microtask(_loadConfiguredDevice);
     return const PrinterState.initial();
   }
 
-  Future<void> autoReconnect() async {
-    if (_isReconnecting) return;
-    _isReconnecting = true;
-    try {
-      final connectedResult = await _repository.isConnected();
-      final pluginConnected = connectedResult.getOrElse((_) => false);
-      final stateConnected = state.connectedDevice != null;
-
-      // Caso feliz: ambos coinciden en conectado → nada que hacer.
-      if (pluginConnected && stateConnected) return;
-
-      // Plugin conectado pero el state no lo sabe (típico después de
-      // rebuild o app resume). Adoptamos el last-connected para que la
-      // UI refleje la realidad. Sincronización en dirección segura.
-      if (pluginConnected && !stateConnected) {
-        final lastResult = await _repository.getLastConnected();
-        final last = lastResult.getOrElse((_) => null);
-        if (last != null) {
-          state = state.copyWith(connectedDevice: last);
-        }
-        return;
-      }
-
-      // Plugin dice desconectado. NO forzamos disconnect en el state
-      // basados solo en esto: `connectionStatus` en algunos SPP baratos
-      // da false-negatives (dice "no conectado" cuando el socket sigue
-      // vivo). Confiar en ese signal y limpiar el state cada 8s haría
-      // que vendedores con BT flaky se coman ciclos de reconexión que
-      // rompen una impresora que estaba andando bien.
-      //
-      // La recuperación real cuando el state está stale ocurre en el
-      // camino `printTicket` → falla al escribir → `clearConnectedDevice`
-      // → `autoReconnect` inmediato. Ese es el disparador confiable.
-      //
-      // Acá solo intentamos reconectar cuando el state YA sabe que
-      // estamos desconectados (state.connectedDevice == null), que es
-      // el caso post-arranque de app, post-fallo de impresión, o post-
-      // pérdida explícita de conexión.
-      if (stateConnected) return;
-
-      final btResult = await _repository.isBluetoothEnabled();
-      if (!btResult.getOrElse((_) => false)) return;
-
-      final lastResult = await _repository.getLastConnected();
-      final last = lastResult.getOrElse((_) => null);
-      if (last == null) return;
-
-      final connectResult = await _repository.connect(last.address);
-      connectResult.match(
-        (_) {},
-        (_) => state = state.copyWith(connectedDevice: last),
-      );
-    } catch (_) {
-      // Silent: auto-reconnect never surfaces errors to the UI.
-    } finally {
-      _isReconnecting = false;
+  Future<void> _loadConfiguredDevice() async {
+    final lastResult = await _repository.getLastConnected();
+    final last = lastResult.getOrElse((_) => null);
+    if (last != null) {
+      state = state.copyWith(connectedDevice: last);
     }
   }
 
@@ -159,170 +78,72 @@ class PrinterController extends Notifier<PrinterState> {
         bluetoothEnabled: true,
         errorMessage: failure.message,
       ),
-      (devices) {
-        state = state.copyWith(
-          status: PrinterStatus.ready,
-          bluetoothEnabled: true,
-          devices: devices,
-        );
-      },
+      (devices) => state = state.copyWith(
+        status: PrinterStatus.ready,
+        bluetoothEnabled: true,
+        devices: devices,
+      ),
     );
 
-    if (state.isConnected) return;
-
+    // Restaura la impresora configurada (sin abrir socket BT).
     final lastResult = await _repository.getLastConnected();
     final last = lastResult.getOrElse((_) => null);
-    if (last == null) return;
-    final knownDevice = state.devices.firstWhere(
-      (d) => d.address == last.address,
-      orElse: () => last,
-    );
-    await _silentConnect(knownDevice);
+    if (last != null) {
+      state = state.copyWith(connectedDevice: last);
+    }
   }
 
+  /// Configura una impresora como preferida. Solo guarda la dirección en
+  /// storage local — no abre ningún socket Bluetooth. La conexión real
+  /// ocurre solo al imprimir.
   Future<void> connect(PrinterDevice device) async {
     state = state.copyWith(isConnecting: true, clearError: true);
-    final result = await _repository.connect(device.address);
-    await result.match(
-      (failure) async {
-        state = state.copyWith(
-          isConnecting: false,
-          errorMessage: failure.message,
-        );
-      },
-      (_) async {
-        await _repository.saveLastConnected(device);
-        state = state.copyWith(
-          isConnecting: false,
-          connectedDevice: device,
-        );
-      },
-    );
+    await _repository.saveLastConnected(device);
+    state = state.copyWith(isConnecting: false, connectedDevice: device);
   }
 
+  /// Olvida la impresora configurada. No hay socket que cerrar.
   Future<void> disconnect() async {
-    final result = await _repository.disconnect();
-    result.match(
-      (failure) => state = state.copyWith(errorMessage: failure.message),
-      (_) => state = state.copyWith(clearConnectedDevice: true),
-    );
+    state = state.copyWith(clearConnectedDevice: true);
   }
 
   Future<void> forgetPrinter() async {
-    await _repository.disconnect();
     await _repository.clearLastConnected();
     state = state.copyWith(clearConnectedDevice: true);
   }
 
   Future<void> printTest() async {
-    state = state.copyWith(isPrinting: true, clearError: true);
-    final result = await _repository.printTest();
-    final failure = result.fold<String?>((f) => f.message, (_) => null);
-    if (failure == null) {
-      state = state.copyWith(isPrinting: false);
+    final address = state.connectedDevice?.address;
+    if (address == null) {
+      state = state.copyWith(errorMessage: 'No hay impresora configurada.');
       return;
     }
-    // Un fallo en imprimir suele significar socket muerto (impresora
-    // apagada, sin batería, fuera de rango). Cerramos el socket a nivel
-    // plugin para descartar cualquier byte buffered (ver `printTicket`),
-    // luego limpiamos `connectedDevice` y disparamos autoReconnect
-    // inmediato — sin esperar el próximo tick del timer — para que el
-    // vendedor tenga la impresora lista lo antes posible.
-    try {
-      await _repository.disconnect();
-    } catch (_) {}
-    state = state.copyWith(
-      isPrinting: false,
-      errorMessage: failure,
-      clearConnectedDevice: true,
-    );
-    unawaited(Future.microtask(autoReconnect));
+    state = state.copyWith(isPrinting: true, clearError: true);
+    final result = await _repository.printTest(address);
+    final failure = result.fold<String?>((f) => f.message, (_) => null);
+    state = state.copyWith(isPrinting: false, errorMessage: failure);
   }
 
   Future<void> printTicket(TicketPayload payload) async {
-    state = state.copyWith(isPrinting: true, clearError: true);
-    final result = await _repository.printTicket(payload);
-    final failure = result.fold<String?>((f) => f.message, (_) => null);
-    if (failure == null) {
-      state = state.copyWith(isPrinting: false);
+    final address = state.connectedDevice?.address;
+    if (address == null) {
+      state = state.copyWith(errorMessage: 'No hay impresora configurada.');
       return;
     }
-    // CRÍTICO: forzamos disconnect al plugin antes de limpiar el state.
-    // Sin esto, los bytes que ya escribimos a un socket BT muerto se
-    // quedan en el buffer del stack Android y flushean cuando la
-    // impresora vuelve a aparearse — imprimiendo un "ticket fantasma"
-    // encima del que el vendedor sí quería imprimir después. Cerrar el
-    // socket a nivel plugin descarta esos bytes.
-    try {
-      await _repository.disconnect();
-    } catch (_) {}
-    state = state.copyWith(
-      isPrinting: false,
-      errorMessage: failure,
-      clearConnectedDevice: true,
-    );
-    unawaited(Future.microtask(autoReconnect));
+    state = state.copyWith(isPrinting: true, clearError: true);
+    final result = await _repository.printTicket(address, payload);
+    final failure = result.fold<String?>((f) => f.message, (_) => null);
+    state = state.copyWith(isPrinting: false, errorMessage: failure);
   }
 
-  /// Verifica que la impresora esté REALMENTE lista para imprimir. Se
-  /// llama desde el flujo de venta ANTES de crear el ticket en el backend
-  /// — si retorna `false`, no se crea nada. Regla de negocio: "si da
-  /// error, no se crea el ticket".
-  ///
-  /// Por qué siempre hacemos un reconnect fresco (no confiamos en el
-  /// `connectionStatus` del plugin):
-  ///
-  ///   - En SPP baratos, `PrintBluetoothThermal.connectionStatus` devuelve
-  ///     `true` con sockets muertos (falso positivo). El escenario típico:
-  ///     el usuario deja el teléfono, la impresora se apaga por batería o
-  ///     timeout, el socket BT queda en un estado zombie. El plugin sigue
-  ///     diciendo "conectado", pero cualquier `writeBytes` falla o queda
-  ///     buffered en el stack de Android.
-  ///   - Si confiáramos en ese status y creáramos el ticket, el vendedor
-  ///     veía "falló impresión", reintentaba, y terminaba con dos tickets
-  ///     en el backend.
-  ///   - Un reconnect fresco (`disconnect` + `connect` a nivel plugin —
-  ///     ver `PrinterBluetoothDatasourceImpl.connect`) es la única forma
-  ///     de garantizar que el socket está VIVO ahora. Si el connect falla,
-  ///     la impresora realmente no está.
-  ///
-  /// Costo: ~500ms-2s por venta. Es el precio de la garantía "no crear
-  /// tickets fantasma". Si en el futuro este costo molesta, la
-  /// alternativa sería un endpoint de ACK a nivel firmware que aún no
-  /// tenemos con estas impresoras baratas.
+  /// Verifica si hay una impresora configurada. Con el modelo connect-to-print
+  /// no hay socket que verificar; si el address existe, el intento de impresión
+  /// se realiza y cualquier fallo se reporta en ese momento.
   Future<bool> verifyConnectedOrReconnect() async {
-    try {
-      final device = state.connectedDevice;
-      if (device == null) return false;
-
-      final btOk =
-          (await _repository.isBluetoothEnabled()).getOrElse((_) => false);
-      if (!btOk) {
-        state = state.copyWith(clearConnectedDevice: true);
-        return false;
-      }
-
-      final result = await _repository.connect(device.address);
-      final ok = result.match((_) => false, (_) => true);
-      if (!ok) {
-        state = state.copyWith(clearConnectedDevice: true);
-      }
-      return ok;
-    } catch (_) {
-      state = state.copyWith(clearConnectedDevice: true);
-      return false;
-    }
+    return state.connectedDevice != null;
   }
 
   Future<void> openSystemSettings() => openAppSettings();
-
-  Future<void> _silentConnect(PrinterDevice device) async {
-    final result = await _repository.connect(device.address);
-    result.match(
-      (_) {},
-      (_) => state = state.copyWith(connectedDevice: device),
-    );
-  }
 
   Future<_PermissionOutcome> _ensurePermissions() async {
     final permissions = [

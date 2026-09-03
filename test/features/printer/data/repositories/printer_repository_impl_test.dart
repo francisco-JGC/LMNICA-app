@@ -77,17 +77,18 @@ void main() {
   });
 
   test('printTest returns Right(unit) on success', () async {
-    when(() => bluetooth.printTest()).thenAnswer((_) async {});
+    when(() => bluetooth.printTest(any())).thenAnswer((_) async {});
 
-    final result = await repository.printTest();
+    final result = await repository.printTest('AA:BB:CC:DD:EE:FF');
 
     expect(result.isRight(), isTrue);
-    verify(() => bluetooth.printTest()).called(1);
+    verify(() => bluetooth.printTest('AA:BB:CC:DD:EE:FF')).called(1);
   });
 
   test('printTicket delegates to datasource and returns Right(unit)',
       () async {
-    when(() => bluetooth.printTicket(any())).thenAnswer((_) async {});
+    when(() => bluetooth.printTicket(any(), any())).thenAnswer((_) async {});
+    const address = 'AA:BB:CC:DD:EE:FF';
     final payload = TicketPayload(
       id: 'test-id',
       gameId: 'diaria',
@@ -101,10 +102,10 @@ void main() {
       date: DateTime(2026, 7, 10, 15, 30),
     );
 
-    final result = await repository.printTicket(payload);
+    final result = await repository.printTicket(address, payload);
 
     expect(result.isRight(), isTrue);
-    verify(() => bluetooth.printTicket(payload)).called(1);
+    verify(() => bluetooth.printTicket(address, payload)).called(1);
   });
 
   test('getLastConnected returns Right(null) when nothing stored', () async {

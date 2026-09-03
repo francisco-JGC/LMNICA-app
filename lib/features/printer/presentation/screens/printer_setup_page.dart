@@ -136,7 +136,7 @@ class _StatusCard extends StatelessWidget {
                 children: [
                   Text(
                     connected
-                        ? 'Conectado'
+                        ? 'Impresora configurada'
                         : state.bluetoothEnabled
                             ? 'Bluetooth activo'
                             : 'Bluetooth apagado',
@@ -150,7 +150,7 @@ class _StatusCard extends StatelessWidget {
                     connected
                         ? state.connectedDevice!.name
                         : state.bluetoothEnabled
-                            ? 'Selecciona una impresora pareada'
+                            ? 'Selecciona una impresora de la lista'
                             : 'Activa el Bluetooth del dispositivo',
                     style: const TextStyle(color: Colors.black54),
                   ),
@@ -195,7 +195,7 @@ class _DeviceTile extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : null,
-      onTap: (isConnected || isConnecting) ? null : onTap,
+      onTap: isConnecting ? null : onTap,
     );
   }
 }
@@ -227,15 +227,6 @@ class _ActionsBar extends StatelessWidget {
                   : const Icon(Icons.receipt_long),
               label: const Text('Imprimir prueba'),
               onPressed: state.isPrinting ? null : controller.printTest,
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              icon: const Icon(Icons.link_off),
-              label: const Text('Desconectar'),
-              onPressed: controller.disconnect,
             ),
           ),
           const SizedBox(height: 8),

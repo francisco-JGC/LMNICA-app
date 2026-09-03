@@ -9,7 +9,7 @@ class PrintTicket {
 
   final PrinterRepository repository;
 
-  Future<Either<Failure, Unit>> call(TicketPayload payload) {
-    return repository.printTicket(payload);
+  Future<Either<Failure, Unit>> call(String address, TicketPayload payload) {
+    return repository.printTicket(address, payload);
   }
 }

@@ -68,9 +68,9 @@ class PrinterRepositoryImpl implements PrinterRepository {
   }
 
   @override
-  Future<Either<Failure, Unit>> printTest() async {
+  Future<Either<Failure, Unit>> printTest(String address) async {
     try {
-      await datasource.printTest();
+      await datasource.printTest(address);
       return const Right(unit);
     } catch (e) {
       return Left(UnexpectedFailure(e.toString()));
@@ -78,9 +78,9 @@ class PrinterRepositoryImpl implements PrinterRepository {
   }
 
   @override
-  Future<Either<Failure, Unit>> printTicket(TicketPayload payload) async {
+  Future<Either<Failure, Unit>> printTicket(String address, TicketPayload payload) async {
     try {
-      await datasource.printTicket(payload);
+      await datasource.printTicket(address, payload);
       return const Right(unit);
     } catch (e) {
       return Left(UnexpectedFailure(e.toString()));

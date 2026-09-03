@@ -8,7 +8,7 @@ class PrintTest {
 
   final PrinterRepository repository;
 
-  Future<Either<Failure, Unit>> call() {
-    return repository.printTest();
+  Future<Either<Failure, Unit>> call(String address) {
+    return repository.printTest(address);
   }
 }

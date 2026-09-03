@@ -16,8 +16,8 @@ abstract interface class PrinterBluetoothDatasource {
   Future<void> connect(String address);
   Future<void> disconnect();
   Future<bool> isConnected();
-  Future<void> printTest();
-  Future<void> printTicket(TicketPayload payload);
+  Future<void> printTest(String address);
+  Future<void> printTicket(String address, TicketPayload payload);
 }
 
 class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
@@ -83,15 +83,25 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
   }
 
   @override
-  Future<void> printTest() async {
-    final bytes = await _buildTestBytes();
-    await _write(bytes);
+  Future<void> printTest(String address) async {
+    await connect(address);
+    try {
+      final bytes = await _buildTestBytes();
+      await _write(bytes);
+    } finally {
+      try { await disconnect(); } catch (_) {}
+    }
   }
 
   @override
-  Future<void> printTicket(TicketPayload payload) async {
-    final bytes = await _buildTicketBytes(payload);
-    await _write(bytes);
+  Future<void> printTicket(String address, TicketPayload payload) async {
+    await connect(address);
+    try {
+      final bytes = await _buildTicketBytes(payload);
+      await _write(bytes);
+    } finally {
+      try { await disconnect(); } catch (_) {}
+    }
   }
 
   Future<void> _write(List<int> bytes) async {
