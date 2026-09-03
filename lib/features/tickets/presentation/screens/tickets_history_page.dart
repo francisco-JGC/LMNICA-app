@@ -383,7 +383,7 @@ class _TicketMenu extends ConsumerWidget {
       (detail) async {
         final allGames = ref.read(gamesControllerProvider).value ?? const [];
         final compatible = allGames
-            .where((g) => g.type == currentGame.type && g.id != currentGame.id)
+            .where((g) => g.isActive && g.type == currentGame.type)
             .toList();
 
         if (!context.mounted) return;
@@ -391,7 +391,7 @@ class _TicketMenu extends ConsumerWidget {
         if (compatible.isEmpty) {
           messenger.showSnackBar(
             const SnackBar(
-              content: Text('No hay otros juegos compatibles para repetir'),
+              content: Text('No hay juegos activos compatibles para repetir'),
             ),
           );
           return;
