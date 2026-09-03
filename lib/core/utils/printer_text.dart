@@ -18,21 +18,37 @@
 ///
 /// Devuelve `''` si el input es `null` o queda vacío después del
 /// filtrado, para que el caller no tenga que null-checkear.
+const _accentMap = {
+  'á': 'a', 'à': 'a', 'ä': 'a', 'â': 'a', 'ã': 'a',
+  'Á': 'A', 'À': 'A', 'Ä': 'A', 'Â': 'A', 'Ã': 'A',
+  'é': 'e', 'è': 'e', 'ë': 'e', 'ê': 'e',
+  'É': 'E', 'È': 'E', 'Ë': 'E', 'Ê': 'E',
+  'í': 'i', 'ì': 'i', 'ï': 'i', 'î': 'i',
+  'Í': 'I', 'Ì': 'I', 'Ï': 'I', 'Î': 'I',
+  'ó': 'o', 'ò': 'o', 'ö': 'o', 'ô': 'o', 'õ': 'o',
+  'Ó': 'O', 'Ò': 'O', 'Ö': 'O', 'Ô': 'O', 'Õ': 'O',
+  'ú': 'u', 'ù': 'u', 'ü': 'u', 'û': 'u',
+  'Ú': 'U', 'Ù': 'U', 'Ü': 'U', 'Û': 'U',
+  'ñ': 'n', 'Ñ': 'N',
+};
+
 String sanitizeForPrinter(String? input) {
   if (input == null || input.isEmpty) return '';
+  // Reemplaza tildes y ñ antes del filtro de rango, ya que muchas
+  // impresoras térmicas (codepage CP437) no los tienen en su tabla de
+  // caracteres y los imprimen como símbolos basura.
+  final normalized = input.splitMapJoin(
+    RegExp('[áàäâãÁÀÄÂÃéèëêÉÈËÊíìïîÍÌÏÎóòöôõÓÒÖÔÕúùüûÚÙÜÛñÑ]'),
+    onMatch: (m) => _accentMap[m.group(0)!] ?? m.group(0)!,
+    onNonMatch: (s) => s,
+  );
   final buf = StringBuffer();
-  for (final rune in input.runes) {
-    // Rango imprimible: ASCII (0x20-0x7E) + control tab/nl si viniera +
-    // Latin-1 Supplement (0xA0-0xFF). Excluye control chars <0x20 salvo
-    // tab/newline, y emojis / CJK / símbolos altos.
+  for (final rune in normalized.runes) {
     if (rune == 0x09 || rune == 0x0A) {
       buf.writeCharCode(rune);
     } else if (rune >= 0x20 && rune <= 0xFF) {
       buf.writeCharCode(rune);
     }
-    // Los codepoints fuera de rango se descartan silenciosamente.
   }
-  // Trim de espacios finales que puedan quedar cuando el emoji era el
-  // último char ("REYES 👑" → "REYES ").
   return buf.toString().trimRight();
 }
