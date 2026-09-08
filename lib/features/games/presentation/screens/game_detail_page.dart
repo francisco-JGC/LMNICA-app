@@ -15,6 +15,7 @@ import '../../../sale_limits/presentation/state/sale_limit_availability_provider
 import '../../../sale_limits/presentation/widgets/sale_limits_banner.dart';
 import '../../../sale_points/presentation/state/active_sale_point_controller.dart';
 import '../../../sales/domain/entities/bet.dart';
+import '../../../sales/domain/entities/date_bet.dart';
 import '../../../sales/presentation/state/cart_controller.dart';
 import '../../../sales/presentation/state/cart_state.dart';
 import '../../../sales/presentation/state/combo_cart_controller.dart';
@@ -166,6 +167,21 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
     final game = widget.game;
     if (lines.isEmpty || game == null) return;
 
+    // Clear any leftover cart state before preloading the repeated ticket so
+    // items don't accumulate on top of a previous session's bets.
+    switch (game.type) {
+      case GameType.regular:
+        ref.read(cartControllerProvider(game.id).notifier).clear();
+      case GameType.threeDigit:
+        ref.read(gana3CartControllerProvider(game.id).notifier).clear();
+      case GameType.fourDigit:
+        ref.read(comboCartControllerProvider(game.id).notifier).clear();
+      case GameType.date:
+        ref.read(dateCartControllerProvider(game.id).notifier).clear();
+      case GameType.multiSorteo:
+        break;
+    }
+
     switch (game.type) {
       case GameType.regular:
         final bets = lines
@@ -183,9 +199,14 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
       case GameType.threeDigit:
         final ctrl = ref.read(gana3CartControllerProvider(game.id).notifier);
         for (final l in lines) {
-          final n = int.tryParse(l.label.trim());
+          final raw = l.label.trim();
+          // Fácil bets are stored as "234 (F)"; exact bets as plain "234".
+          final isFacil = raw.toUpperCase().contains('(F)');
+          final numStr =
+              raw.replaceAll(RegExp(r'\(F\)', caseSensitive: false), '').trim();
+          final n = int.tryParse(numStr);
           if (n != null && n >= 0 && n <= 999) {
-            ctrl.addSingle(number: n, amount: l.amount, isExact: false);
+            ctrl.addSingle(number: n, amount: l.amount, isExact: !isFacil);
           }
         }
       case GameType.fourDigit:
@@ -197,6 +218,16 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
           }
         }
       case GameType.date:
+        final ctrl = ref.read(dateCartControllerProvider(game.id).notifier);
+        for (final l in lines) {
+          // DateBet.label format: "15-mar" (padded day + hyphen + abbreviation).
+          final parts = l.label.trim().split('-');
+          if (parts.length != 2) continue;
+          final day = int.tryParse(parts[0]);
+          final monthIdx = kMonthAbbreviations.indexOf(parts[1].toLowerCase());
+          if (day == null || monthIdx < 0) continue;
+          ctrl.addSingle(day: day, month: monthIdx + 1, amount: l.amount);
+        }
       case GameType.multiSorteo:
         break;
     }
