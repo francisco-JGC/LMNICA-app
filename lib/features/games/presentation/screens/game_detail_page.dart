@@ -11,6 +11,7 @@ import '../../../game_prizes/domain/entities/effective_game_prize.dart';
 import '../../../game_prizes/presentation/state/effective_game_prizes_provider.dart';
 import '../../../printer/domain/entities/ticket_payload.dart';
 import '../../../printer/presentation/state/printer_controller.dart';
+import '../../../sale_limits/domain/repositories/sale_limits_repository.dart';
 import '../../../sale_limits/presentation/state/sale_limit_availability_provider.dart';
 import '../../../sale_limits/presentation/widgets/sale_limits_banner.dart';
 import '../../../sale_points/presentation/state/active_sale_point_controller.dart';
@@ -1630,6 +1631,52 @@ Future<void> _persistAndPrintInner(
       subGameName: l.subGameName,
     );
   }).toList();
+
+  // Validate per-number minimum amounts before submitting.
+  // Fails silently on network error — backend still enforces on server side.
+  final minAmounts = await getIt<SaleLimitsRepository>()
+      .getMinAmountsByNumber(gameId: game.id, salePointId: salePoint.id)
+      .then((r) => r.fold((_) => <String, int>{}, (m) => m));
+  for (final line in requestLines) {
+    final min = minAmounts[line.label];
+    if (min != null && line.amount < min) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(
+          'Monto mínimo para "${line.label}" es C\$$min. Ingresaste C\$${line.amount}.',
+        ),
+      ));
+      return;
+    }
+  }
+
+  // Validate per-ticket maximum: each line must not exceed maxPerTicket.
+  // Fails silently on network error — backend still enforces.
+  if (drawAt != null) {
+    final availResult = await getIt<SaleLimitsRepository>().getAvailability(
+      SaleLimitAvailabilityQuery(
+        gameId: game.id,
+        salePointId: salePoint.id,
+        drawAt: drawAt,
+      ),
+    );
+    final maxPerTicket =
+        availResult.fold((_) => null, (a) => a.maxPerTicket);
+    if (maxPerTicket != null) {
+      for (final line in requestLines) {
+        if (line.amount > maxPerTicket) {
+          final needed = (line.amount / maxPerTicket).ceil();
+          messenger.showSnackBar(SnackBar(
+            content: Text(
+              'Máximo C\$$maxPerTicket por boleto para el número "${line.label}". '
+              'Divide en $needed boletos de C\$$maxPerTicket.',
+            ),
+            duration: const Duration(seconds: 5),
+          ));
+          return;
+        }
+      }
+    }
+  }
 
   // UUID de idempotencia — combina:
   //   (a) Auto-retry del AuthInterceptor tras 401: el request queda con

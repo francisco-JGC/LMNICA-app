@@ -107,7 +107,9 @@ class _SaleLimitsBannerState extends ConsumerState<SaleLimitsBanner> {
                           child: Text(
                             blocked > 0
                                 ? '$blocked número(s) bloqueado(s) — límite C\$$limit por sorteo'
-                                : 'Límite activo: C\$$limit por número por sorteo',
+                                : availability.maxPerTicket != null
+                                    ? 'Límite: C\$$limit por sorteo · C\$${availability.maxPerTicket} por boleto'
+                                    : 'Límite activo: C\$$limit por número por sorteo',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,

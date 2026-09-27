@@ -42,3 +42,28 @@ final saleLimitAvailabilityProvider = FutureProvider.autoDispose
     );
   },
 );
+
+class _MinAmountsKey extends Equatable {
+  const _MinAmountsKey({required this.gameId, required this.salePointId});
+  final String gameId;
+  final String salePointId;
+  @override
+  List<Object?> get props => [gameId, salePointId];
+}
+
+/// Minimum bet amounts per number for a (game, sucursal) pair.
+/// Returns an empty map when no minimums are configured.
+final minAmountsByNumberProvider = FutureProvider.autoDispose
+    .family<Map<String, int>, _MinAmountsKey>(
+  (ref, key) async {
+    final repo = getIt<SaleLimitsRepository>();
+    final result = await repo.getMinAmountsByNumber(
+      gameId: key.gameId,
+      salePointId: key.salePointId,
+    );
+    return result.fold(
+      (_) => const {},
+      (data) => data,
+    );
+  },
+);

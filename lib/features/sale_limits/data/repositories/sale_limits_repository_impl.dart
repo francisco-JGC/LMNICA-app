@@ -26,4 +26,24 @@ class SaleLimitsRepositoryImpl implements SaleLimitsRepository {
       return Left(UnexpectedFailure(e.toString()));
     }
   }
+
+  @override
+  Future<Either<Failure, Map<String, int>>> getMinAmountsByNumber({
+    required String gameId,
+    required String salePointId,
+  }) async {
+    try {
+      final result = await remote.getMinAmountsByNumber(
+        gameId: gameId,
+        salePointId: salePointId,
+      );
+      return Right(result);
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message));
+    } catch (e) {
+      return Left(UnexpectedFailure(e.toString()));
+    }
+  }
 }

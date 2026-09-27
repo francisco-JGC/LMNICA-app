@@ -10,6 +10,11 @@ abstract interface class SaleLimitsRemoteDatasource {
   Future<SaleLimitAvailabilityModel> getAvailability(
     SaleLimitAvailabilityQuery query,
   );
+
+  Future<Map<String, int>> getMinAmountsByNumber({
+    required String gameId,
+    required String salePointId,
+  });
 }
 
 class SaleLimitsRemoteDatasourceImpl implements SaleLimitsRemoteDatasource {
@@ -33,6 +38,27 @@ class SaleLimitsRemoteDatasourceImpl implements SaleLimitsRemoteDatasource {
       final data = response.data;
       if (data == null) throw ServerException('Empty response');
       return SaleLimitAvailabilityModel.fromJson(data);
+    } on DioException catch (e) {
+      throw _mapError(e);
+    }
+  }
+
+  @override
+  Future<Map<String, int>> getMinAmountsByNumber({
+    required String gameId,
+    required String salePointId,
+  }) async {
+    try {
+      final response = await client.instance.get<Map<String, dynamic>>(
+        '/sale-limits-by-number/min-amounts',
+        queryParameters: {'gameId': gameId, 'salePointId': salePointId},
+      );
+      final data = response.data ?? {};
+      final result = <String, int>{};
+      data.forEach((k, v) {
+        if (v is num) result[k] = v.toInt();
+      });
+      return result;
     } on DioException catch (e) {
       throw _mapError(e);
     }

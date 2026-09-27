@@ -3,6 +3,7 @@ import '../../domain/entities/sale_limit_availability.dart';
 class SaleLimitAvailabilityModel extends SaleLimitAvailability {
   const SaleLimitAvailabilityModel({
     required super.limit,
+    required super.maxPerTicket,
     required super.usage,
   });
 
@@ -14,8 +15,10 @@ class SaleLimitAvailabilityModel extends SaleLimitAvailability {
       if (value is num) usage[entry.key] = value.toInt();
     }
     final limitRaw = json['limit'];
+    final mptRaw = json['maxPerTicket'];
     return SaleLimitAvailabilityModel(
       limit: limitRaw is num ? limitRaw.toInt() : null,
+      maxPerTicket: mptRaw is num ? mptRaw.toInt() : null,
       usage: usage,
     );
   }

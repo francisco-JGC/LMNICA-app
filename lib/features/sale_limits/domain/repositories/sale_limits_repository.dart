@@ -19,4 +19,9 @@ abstract interface class SaleLimitsRepository {
   Future<Either<Failure, SaleLimitAvailability>> getAvailability(
     SaleLimitAvailabilityQuery query,
   );
+
+  Future<Either<Failure, Map<String, int>>> getMinAmountsByNumber({
+    required String gameId,
+    required String salePointId,
+  });
 }
