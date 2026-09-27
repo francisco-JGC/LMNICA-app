@@ -18,6 +18,8 @@ class TicketSummary extends Equatable {
     required this.folio,
     required this.gameId,
     required this.salePointId,
+    required this.salePointName,
+    required this.sellerName,
     required this.client,
     required this.status,
     required this.total,
@@ -35,6 +37,8 @@ class TicketSummary extends Equatable {
   final String folio;
   final String gameId;
   final String salePointId;
+  final String? salePointName;
+  final String? sellerName;
   final String? client;
   final TicketStatus status;
   final int total;
@@ -66,6 +70,8 @@ class TicketSummary extends Equatable {
         folio,
         gameId,
         salePointId,
+        salePointName,
+        sellerName,
         client,
         status,
         total,
