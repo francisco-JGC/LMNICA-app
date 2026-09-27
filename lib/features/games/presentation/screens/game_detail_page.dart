@@ -1651,12 +1651,13 @@ Future<void> _persistAndPrintInner(
 
   // Validate per-ticket maximum: each line must not exceed maxPerTicket.
   // Fails silently on network error — backend still enforces.
-  if (drawAt != null) {
+  final resolvedDrawAt = drawAt ?? lock.nextDrawAt;
+  if (resolvedDrawAt != null) {
     final availResult = await getIt<SaleLimitsRepository>().getAvailability(
       SaleLimitAvailabilityQuery(
         gameId: game.id,
         salePointId: salePoint.id,
-        drawAt: drawAt,
+        drawAt: resolvedDrawAt,
       ),
     );
     final maxPerTicket =
