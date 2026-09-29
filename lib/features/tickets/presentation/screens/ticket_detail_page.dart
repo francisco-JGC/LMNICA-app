@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -144,10 +145,28 @@ class _DetailView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            '#${ticket.folio}',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(color: Colors.grey.shade700),
+          GestureDetector(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: ticket.folio));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Folio copiado'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '#${ticket.folio}',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(color: Colors.grey.shade700),
+                ),
+                const SizedBox(width: 6),
+                Icon(Icons.copy_outlined, size: 16, color: Colors.grey.shade600),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           _InfoRow(
@@ -162,6 +181,10 @@ class _DetailView extends StatelessWidget {
           ),
           if (ticket.client != null && ticket.client!.isNotEmpty)
             _InfoRow(label: 'Cliente', value: ticket.client!),
+          if (ticket.sellerName != null && ticket.sellerName!.isNotEmpty)
+            _InfoRow(label: 'Vendedor', value: ticket.sellerName!),
+          if (ticket.salePointName != null && ticket.salePointName!.isNotEmpty)
+            _InfoRow(label: 'Puesto', value: ticket.salePointName!),
           if (ticket.isVoided && ticket.voidedReason != null)
             _InfoRow(label: 'Motivo anulación', value: ticket.voidedReason!),
           const Divider(height: 32),

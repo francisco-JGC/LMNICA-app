@@ -30,8 +30,8 @@ class TicketImageShareService {
     required TicketPayload payload,
   }) async {
     try {
-      final bytes =
-          await _capture(context, payload).timeout(const Duration(seconds: 6));
+      final bytes = await _capture(context, payload)
+          .timeout(const Duration(seconds: 6), onTimeout: () => null);
       if (bytes == null) return false;
 
       final tempDir = await getTemporaryDirectory();

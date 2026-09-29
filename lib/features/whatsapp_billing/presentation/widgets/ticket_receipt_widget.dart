@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/currency.dart';
 import '../../../printer/domain/entities/ticket_payload.dart';
 
@@ -12,6 +13,8 @@ import '../../../printer/domain/entities/ticket_payload.dart';
 ///
 /// Se envuelve en `RepaintBoundary` desde el llamador; acá solo definimos
 /// la vista pura.
+const _kTicketBrandColor = AppTheme.primary;
+
 class TicketReceiptWidget extends StatelessWidget {
   const TicketReceiptWidget({
     required this.payload,
@@ -25,17 +28,18 @@ class TicketReceiptWidget extends StatelessWidget {
     return Material(
       color: Colors.white,
       child: Container(
-        width: 460,
-        padding: const EdgeInsets.all(28),
+        width: 380,
+        padding: const EdgeInsets.all(18),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (payload.isCopy) _CopyBanner(copyKind: payload.copyKind),
             _InfoBlock(payload: payload),
             const SizedBox(height: 12),
             const _SolidDivider(),
             const SizedBox(height: 8),
-            _LinesTable(lines: payload.lines),
+            _LinesTable(lines: payload.lines, isFourDigit: payload.isFourDigit),
             const SizedBox(height: 8),
             const _SolidDivider(),
             const SizedBox(height: 8),
@@ -44,11 +48,11 @@ class TicketReceiptWidget extends StatelessWidget {
             const _SolidDivider(),
             const SizedBox(height: 12),
             const _CenteredNote(
-              text: 'Boleto valido para 1 sorteo',
+              text: 'Valido para 1 sorteo',
               bold: true,
             ),
-            const _CenteredNote(text: 'Por favor revisar su compra'),
-            const _CenteredNote(text: 'No se aceptan devoluciones'),
+            const _CenteredNote(text: 'Por favor revise su boleto', bold: true),
+            const _CenteredNote(text: 'Premio valido por 7 dias', bold: true),
             const SizedBox(height: 16),
             _QrBlock(data: payload.toQrData()),
             if (payload.footer != null && payload.footer!.isNotEmpty) ...[
@@ -56,6 +60,38 @@ class TicketReceiptWidget extends StatelessWidget {
               _CenteredNote(text: payload.footer!, bold: true),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CopyBanner extends StatelessWidget {
+  const _CopyBanner({required this.copyKind});
+  final TicketCopyKind copyKind;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = copyKind == TicketCopyKind.resend
+        ? 'BOLETO REENVIADO'
+        : 'RECIBO DE COPIA';
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: _kTicketBrandColor.withAlpha(25),
+        border: Border.all(color: _kTicketBrandColor, width: 1.5),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          color: _kTicketBrandColor,
+          letterSpacing: 1.2,
         ),
       ),
     );
@@ -75,37 +111,26 @@ class _InfoBlock extends StatelessWidget {
     // como sorteo de 9pm porque UTC-6 nunca se aplicaba.
     final saleDateFmt = DateFormat('dd/MM/yyyy');
     final timeFmt = DateFormat('h:mm a', 'en_US');
-    final shortDateFmt = DateFormat('dd/MM');
     final saleLocal = payload.date.toLocal();
     final saleFormatted =
         '${saleDateFmt.format(saleLocal)} ${timeFmt.format(saleLocal).toLowerCase()}';
-
-    String? drawFormatted;
-    if (payload.drawAt != null) {
-      final drawLocal = payload.drawAt!.toLocal();
-      final now = DateTime.now();
-      final sameDay = drawLocal.year == now.year &&
-          drawLocal.month == now.month &&
-          drawLocal.day == now.day;
-      final drawTime = timeFmt.format(drawLocal).toLowerCase();
-      drawFormatted =
-          sameDay ? drawTime : '${shortDateFmt.format(drawLocal)} $drawTime';
-    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _InfoLine(text: 'Folio: ${payload.folio}'),
         _InfoLine(text: 'Fecha: $saleFormatted'),
-        _InfoLine(
-          text: drawFormatted != null
-              ? 'Sorteo: ${payload.gameName} - $drawFormatted'
-              : 'Sorteo: ${payload.gameName}',
-        ),
+        _InfoLine(text: 'Juego: ${payload.gameName}'),
+        if (payload.drawAt != null)
+          _InfoLine(
+            text: 'Sorteo: ${timeFmt.format(payload.drawAt!.toLocal()).toLowerCase()}',
+          ),
+        // Cliente siempre visible (aunque esté vacío)
+        _InfoLine(text: 'Cliente: ${payload.client ?? ''}'),
+        if (payload.salePoint != null && payload.salePoint!.isNotEmpty)
+          _InfoLine(text: 'Puesto: ${payload.salePoint!}'),
         if (payload.seller != null && payload.seller!.isNotEmpty)
           _InfoLine(text: 'Vendedor: ${payload.seller!}'),
-        if (payload.client != null && payload.client!.isNotEmpty)
-          _InfoLine(text: 'Cliente: ${payload.client!}'),
       ],
     );
   }
@@ -132,41 +157,46 @@ class _InfoLine extends StatelessWidget {
 }
 
 class _LinesTable extends StatelessWidget {
-  const _LinesTable({required this.lines});
+  const _LinesTable({required this.lines, required this.isFourDigit});
   final List<TicketLine> lines;
+  final bool isFourDigit;
 
   @override
   Widget build(BuildContext context) {
     const headerStyle = TextStyle(
       fontSize: 13,
       fontWeight: FontWeight.w700,
-      color: Colors.black,
+      color: Colors.white,
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Row(
-          children: [
-            Expanded(flex: 4, child: Text('No.', style: headerStyle)),
-            Expanded(
-              flex: 3,
-              child: Text(
-                'Monto',
-                textAlign: TextAlign.right,
-                style: headerStyle,
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          color: _kTicketBrandColor,
+          child: Row(
+            children: [
+              const Expanded(flex: 4, child: Text('No.', style: headerStyle)),
+              const Expanded(
+                flex: 3,
+                child: Text(
+                  'Monto',
+                  textAlign: TextAlign.right,
+                  style: headerStyle,
+                ),
               ),
-            ),
-            Expanded(
-              flex: 4,
-              child: Text(
-                'Premio',
-                textAlign: TextAlign.right,
-                style: headerStyle,
+              Expanded(
+                flex: 4,
+                child: Text(
+                  isFourDigit ? 'Tipo' : 'Premio',
+                  textAlign: TextAlign.right,
+                  style: headerStyle,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         for (var i = 0; i < lines.length; i++) ...[
           if (lines[i].subGameName != null &&
               (i == 0 ||
@@ -184,7 +214,8 @@ class _LinesTable extends StatelessWidget {
               ),
             ),
           ],
-          _LineRow(line: lines[i]),
+          _LineRow(line: lines[i], isFourDigit: isFourDigit),
+          if (i < lines.length - 1) const Divider(height: 4, thickness: 0.5),
         ],
       ],
     );
@@ -192,8 +223,9 @@ class _LinesTable extends StatelessWidget {
 }
 
 class _LineRow extends StatelessWidget {
-  const _LineRow({required this.line});
+  const _LineRow({required this.line, required this.isFourDigit});
   final TicketLine line;
+  final bool isFourDigit;
 
   @override
   Widget build(BuildContext context) {
@@ -206,7 +238,7 @@ class _LineRow extends StatelessWidget {
             child: Text(
               line.number,
               style: const TextStyle(
-                fontSize: 18,
+                fontSize: 22,
                 fontWeight: FontWeight.w800,
                 color: Colors.black,
                 fontFeatures: [FontFeature.tabularFigures()],
@@ -219,7 +251,7 @@ class _LineRow extends StatelessWidget {
               kAmountFormat.format(line.amount),
               textAlign: TextAlign.right,
               style: const TextStyle(
-                fontSize: 18,
+                fontSize: 22,
                 fontWeight: FontWeight.w800,
                 color: Colors.black,
                 fontFeatures: [FontFeature.tabularFigures()],
@@ -229,10 +261,10 @@ class _LineRow extends StatelessWidget {
           Expanded(
             flex: 4,
             child: Text(
-              kAmountFormat.format(line.prize),
+              isFourDigit ? 'E' : kAmountFormat.format(line.prize),
               textAlign: TextAlign.right,
               style: const TextStyle(
-                fontSize: 18,
+                fontSize: 22,
                 fontWeight: FontWeight.w800,
                 color: Colors.black,
                 fontFeatures: [FontFeature.tabularFigures()],
@@ -267,7 +299,7 @@ class _TotalRow extends StatelessWidget {
         Expanded(
           flex: 5,
           child: Text(
-            kAmountFormat.format(total),
+            kCurrencyFormat.format(total),
             textAlign: TextAlign.right,
             style: const TextStyle(
               fontSize: 15,

@@ -784,6 +784,7 @@ class _MultiSorteoGameViewState
             drawAt: receipt.drawAt,
             seller: ref.read(currentUserProvider)?.name,
             client: cart.client,
+            salePoint: ref.read(activeSalePointProvider).selected?.name,
           ),
         );
       case GameType.date:
@@ -818,6 +819,8 @@ class _MultiSorteoGameViewState
             drawAt: receipt.drawAt,
             seller: ref.read(currentUserProvider)?.name,
             client: cart.client,
+            salePoint: ref.read(activeSalePointProvider).selected?.name,
+            isDate: true,
           ),
         );
       case GameType.threeDigit:
@@ -854,6 +857,7 @@ class _MultiSorteoGameViewState
             drawAt: receipt.drawAt,
             seller: ref.read(currentUserProvider)?.name,
             client: cart.client,
+            salePoint: ref.read(activeSalePointProvider).selected?.name,
           ),
         );
       case GameType.fourDigit:
@@ -889,6 +893,8 @@ class _MultiSorteoGameViewState
             drawAt: receipt.drawAt,
             seller: ref.read(currentUserProvider)?.name,
             client: cart.client,
+            salePoint: ref.read(activeSalePointProvider).selected?.name,
+            isFourDigit: true,
           ),
         );
       case GameType.multiSorteo:
@@ -1377,6 +1383,7 @@ Future<void> _printRegular(
       drawAt: receipt.drawAt,
       seller: ref.read(currentUserProvider)?.name,
       client: cart.client,
+      salePoint: ref.read(activeSalePointProvider).selected?.name,
     ),
     onSuccess: () {
       ref.read(cartControllerProvider(game.id).notifier).clear();
@@ -1427,6 +1434,8 @@ Future<void> _printCombo(
       drawAt: receipt.drawAt,
       seller: ref.read(currentUserProvider)?.name,
       client: cart.client,
+      salePoint: ref.read(activeSalePointProvider).selected?.name,
+      isFourDigit: true,
     ),
     onSuccess: () {
       final successMultiplier = cart.bets.isNotEmpty ? cart.bets.first.multiplier : kComboMultiplier;
@@ -1475,6 +1484,7 @@ Future<void> _printGana3(
       drawAt: receipt.drawAt,
       seller: ref.read(currentUserProvider)?.name,
       client: cart.client,
+      salePoint: ref.read(activeSalePointProvider).selected?.name,
     ),
     onSuccess: () {
       ref.read(gana3CartControllerProvider(game.id).notifier).clear();
@@ -1522,6 +1532,8 @@ Future<void> _printDates(
       drawAt: receipt.drawAt,
       seller: ref.read(currentUserProvider)?.name,
       client: cart.client,
+      salePoint: ref.read(activeSalePointProvider).selected?.name,
+      isDate: true,
     ),
     onSuccess: () {
       ref.read(dateCartControllerProvider(game.id).notifier).clear();

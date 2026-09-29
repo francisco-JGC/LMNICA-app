@@ -17,7 +17,7 @@ abstract interface class PrinterBluetoothDatasource {
   Future<void> disconnect();
   Future<bool> isConnected();
   Future<void> printTest(String address);
-  Future<void> printTicket(String address, TicketPayload payload);
+  Future<void> printTicket(String address, TicketPayload payload, {bool isSmartPos = false});
 }
 
 class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
@@ -43,6 +43,7 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
   // y liberamos el ciclo de reconexión.
   static const _kConnectTimeout = Duration(seconds: 10);
   static const _kDisconnectTimeout = Duration(seconds: 3);
+  static const _kWriteTimeout = Duration(seconds: 15);
 
   @override
   Future<void> connect(String address) async {
@@ -94,10 +95,10 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
   }
 
   @override
-  Future<void> printTicket(String address, TicketPayload payload) async {
+  Future<void> printTicket(String address, TicketPayload payload, {bool isSmartPos = false}) async {
     await connect(address);
     try {
-      final bytes = await _buildTicketBytes(payload);
+      final bytes = await _buildTicketBytes(payload, isSmartPos: isSmartPos);
       await _write(bytes);
     } finally {
       try { await disconnect(); } catch (_) {}
@@ -105,10 +106,18 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
   }
 
   Future<void> _write(List<int> bytes) async {
-    final ok = await PrintBluetoothThermal.writeBytes(bytes);
+    final ok = await PrintBluetoothThermal.writeBytes(bytes)
+        .timeout(_kWriteTimeout, onTimeout: () => false);
     if (!ok) {
       throw Exception('No fue posible enviar los datos a la impresora');
     }
+    // `writeBytes` retorna cuando los bytes llegan al buffer BT, no cuando
+    // la impresora termina de procesarlos. Si desconectamos de inmediato, la
+    // impresora descarta lo que todavía no imprimió. Esperamos proporcional
+    // al tamaño: ~40 bytes/ms es una estimación conservadora para 58mm a
+    // 80 mm/s; mínimo 1 s, máximo 6 s.
+    final waitMs = (bytes.length / 40).ceil().clamp(1000, 6000);
+    await Future<void>.delayed(Duration(milliseconds: waitMs));
   }
 
   List<int> _safeQrCode(Generator g, String text, {int moduleSize = 6}) {
@@ -155,11 +164,10 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
     ];
   }
 
-  Future<List<int>> _buildTicketBytes(TicketPayload p) async {
+  Future<List<int>> _buildTicketBytes(TicketPayload p, {bool isSmartPos = false}) async {
     final profile = await CapabilityProfile.load();
     final g = Generator(PaperSize.mm58, profile);
     final dateOnly = DateFormat('dd/MM/yyyy');
-    final shortDate = DateFormat('dd/MM');
     // `.toLocal()` es obligatorio: los DateTime que vienen del backend
     // (reimpresiones, reenvíos) llegan en UTC. Sin convertir a hora local
     // el ticket físico salía con la hora adelantada 6h (offset UTC-6 de
@@ -170,63 +178,81 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
       final t = DateFormat('h:mm a', 'en_US').format(local).toLowerCase();
       return '${dateOnly.format(local)} $t';
     }
-    String formatDrawHint(DateTime d) {
-      final local = d.toLocal();
-      final t = DateFormat('h:mm a', 'en_US').format(local).toLowerCase();
-      final now = DateTime.now();
-      final sameDay = local.year == now.year &&
-          local.month == now.month &&
-          local.day == now.day;
-      return sameDay ? t : '${shortDate.format(local)} $t';
-    }
     final money = kAmountFormat;
-
-    const infoStyle = PosStyles(bold: true, align: PosAlign.left);
-    const infoRight = PosStyles(bold: true, align: PosAlign.right);
-    const numberStyle = PosStyles(
-      bold: true,
-      height: PosTextSize.size2,
-      align: PosAlign.left,
-    );
-    const numberRight = PosStyles(
-      bold: true,
-      height: PosTextSize.size2,
-      align: PosAlign.right,
-    );
-    PosColumn gutter() => PosColumn(text: '', width: 1);
+    // Premio sin símbolo de moneda para que quepa en la columna estrecha.
+    final prize = NumberFormat('#0', 'en_US');
 
     // Sanitizamos campos alimentados por el usuario (nombre del vendedor,
-    // cliente, footer) porque el codec ESC/POS rechaza codepoints fuera
-    // del codepage (emojis, símbolos raros) con `ArgumentError: Contains
-    // invalid characters` y toda la impresión falla. Ver
+    // sucursal, cliente, footer) porque el codec ESC/POS rechaza codepoints
+    // fuera del codepage (emojis, símbolos raros) con `ArgumentError:
+    // Contains invalid characters`, y toda la impresión falla. Ver
     // `printer_text.dart` para el detalle.
+    final salePoint = sanitizeForPrinter(p.salePoint);
     final seller = sanitizeForPrinter(p.seller);
     final client = sanitizeForPrinter(p.client);
     final gameName = sanitizeForPrinter(p.gameName);
     final footer = sanitizeForPrinter(p.footer);
 
+    // Banner para reimpresiones/reenvíos — el cliente sabe que el papel
+    // no es una venta nueva.
+    final copyBanner = switch (p.copyKind) {
+      TicketCopyKind.reprint => 'RECIBO DE COPIA',
+      TicketCopyKind.resend => 'BOLETO REENVIADO',
+      TicketCopyKind.original => null,
+    };
+
+    // --- Formato de columnas ---
+    // Papel mm58 = 32 columnas en size1, 16 columnas en size2.
+    // Dividimos en tres secciones de igual ancho físico:
+    //   Física 0-11  → size1: 12 chars  |  size2: 6 chars
+    //   Física 12-21 → size1: 10 chars  |  size2: 5 chars
+    //   Física 22-31 → size1: 10 chars  |  size2: 5 chars
+    //
+    // Usamos g.text() con strings preformateados en lugar de g.row() para
+    // evitar el problema de SmartPOS: g.row() emite ESC ! (cambio de modo)
+    // dentro de la línea por cada columna; muchos SmartPOS lo procesan como
+    // comando de "línea siguiente" en vez de inline, desalineando las
+    // columnas y mezclando los números.
+    String rowSize1(String left, String mid, String right) =>
+        _colFit(left, 12, left: true) +
+        _colCenter(mid, 10) +
+        _colFit(right, 10, left: false);
+
+    String rowSize2(String left, String mid, String right) =>
+        _colFit(left, 6, left: true) +
+        _colCenter(mid, 5) +
+        _colFit(right, 5, left: false);
+
+    // shiftLeft: número + monto anchos → todo izquierda para evitar solapamiento
+    String rowSize2Left(String left, String mid, String right) =>
+        _colFit(left, 6, left: true) +
+        _colFit(mid, 5, left: true) +
+        _colFit(right, 5, left: true);
+
     return [
       ...g.clearStyle(),
-      ...g.setStyles(const PosStyles(align: PosAlign.left)),
-      ...g.text('  Folio: ${p.folio}', styles: infoStyle),
-      ...g.text('  Fecha: ${formatDateTime(p.date)}', styles: infoStyle),
-      ...g.text(
-        '  Sorteo: $gameName'
-        '${p.drawAt != null ? ' - ${formatDrawHint(p.drawAt!)}' : ''}',
-        styles: infoStyle,
-      ),
+      ...g.setStyles(const PosStyles(align: PosAlign.center)),
+      if (copyBanner != null)
+        ...g.text(copyBanner, styles: const PosStyles(bold: true, align: PosAlign.center)),
+      ...g.text('Folio: ${p.folio}', styles: const PosStyles(bold: true, align: PosAlign.center)),
+      ...g.text('Fecha: ${formatDateTime(p.date)}', styles: const PosStyles(bold: true, align: PosAlign.center)),
+      ...g.text('Juego: $gameName', styles: const PosStyles(bold: true, align: PosAlign.center)),
+      if (p.drawAt != null)
+        ...g.text(
+          'Sorteo: ${DateFormat('h:mm a', 'en_US').format(p.drawAt!.toLocal()).toLowerCase()}',
+          styles: const PosStyles(bold: true, align: PosAlign.center),
+        ),
+      ...g.text('Cliente: $client', styles: const PosStyles(bold: true, align: PosAlign.center)),
+      if (salePoint.isNotEmpty)
+        ...g.text('Puesto: $salePoint', styles: const PosStyles(bold: true, align: PosAlign.center)),
       if (seller.isNotEmpty)
-        ...g.text('  Vendedor: $seller', styles: infoStyle),
-      if (client.isNotEmpty)
-        ...g.text('  Cliente: $client', styles: infoStyle),
-      ...g.hr(),
-      ...g.row([
-        gutter(),
-        PosColumn(text: 'No.', width: 3, styles: infoStyle),
-        PosColumn(text: 'Monto', width: 3, styles: infoRight),
-        PosColumn(text: 'Premio', width: 4, styles: infoRight),
-        gutter(),
-      ]),
+        ...g.text('Vendedor: $seller', styles: const PosStyles(bold: true, align: PosAlign.center)),
+      ..._dashedLine(g),
+      ...g.text(
+        rowSize1('Apuesta', 'Monto', p.isFourDigit ? 'Tipo' : 'Premio'),
+        styles: const PosStyles(bold: true, align: PosAlign.left),
+      ),
+      ..._dashedLine(g),
       for (var i = 0; i < p.lines.length; i++) ...[
         if (p.lines[i].subGameName != null &&
             (i == 0 ||
@@ -237,46 +263,53 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
             styles: const PosStyles(bold: true),
           ),
         ],
-        ...g.row([
-          gutter(),
-          PosColumn(text: p.lines[i].number, width: 3, styles: numberStyle),
-          PosColumn(
-            text: money.format(p.lines[i].amount),
-            width: 3,
-            styles: numberRight,
-          ),
-          PosColumn(
-            text: money.format(p.lines[i].prize),
-            width: 4,
-            styles: numberRight,
-          ),
-          gutter(),
-        ]),
+        // Juegos de fecha: etiquetas largas ("01 Ene") → size1 siempre.
+        // Juegos de número: size2 (BT normal) o size1 (SmartPOS que ignora
+        // el comando de ancho doble ESC/POS).
+        ...(() {
+          if (p.isDate || isSmartPos) {
+            return g.text(
+              rowSize1(
+                p.lines[i].number,
+                money.format(p.lines[i].amount),
+                p.isFourDigit ? 'E' : prize.format(p.lines[i].prize),
+              ),
+              styles: const PosStyles(bold: true, align: PosAlign.left),
+            );
+          }
+          // shiftLeft: monto > 2 dígitos (>=100) Y premio > 4 dígitos (>=10000)
+          // → todo izquierda para que no se superponga en los 5 chars del size2.
+          final shiftLeft = !p.isFourDigit
+              && p.lines[i].amount > 99
+              && p.lines[i].prize > 9999;
+          final prizeText = p.isFourDigit ? 'E' : prize.format(p.lines[i].prize);
+          return g.text(
+            shiftLeft
+                ? rowSize2Left(p.lines[i].number, money.format(p.lines[i].amount), prizeText)
+                : rowSize2(p.lines[i].number, money.format(p.lines[i].amount), prizeText),
+            styles: const PosStyles(bold: true, width: PosTextSize.size2, align: PosAlign.left),
+          );
+        })(),
       ],
-      ...g.hr(),
-      ...g.row([
-        gutter(),
-        PosColumn(text: 'TOTAL', width: 5, styles: infoStyle),
-        PosColumn(
-          text: money.format(p.total),
-          width: 5,
-          styles: infoRight,
-        ),
-        gutter(),
-      ]),
-      ...g.hr(),
+      ..._dashedLine(g),
       ...g.text(
-        'Boleto valido para 1 sorteo',
+        'TOTAL: ${kCurrencyFormat.format(p.total)}',
+        styles: const PosStyles(align: PosAlign.center, bold: true),
+      ),
+      ...g.emptyLines(1),
+      ...g.text(
+        'Valido para 1 sorteo',
         styles: const PosStyles(align: PosAlign.center, bold: true),
       ),
       ...g.text(
-        'Por favor revisar su compra',
-        styles: const PosStyles(align: PosAlign.center),
+        'Por favor revise su boleto',
+        styles: const PosStyles(align: PosAlign.center, bold: true),
       ),
       ...g.text(
-        'No se aceptan devoluciones',
-        styles: const PosStyles(align: PosAlign.center),
+        'Premio valido por 7 dias',
+        styles: const PosStyles(align: PosAlign.center, bold: true),
       ),
+      ...g.emptyLines(1),
       ..._safeQrCode(g, p.toQrData(), moduleSize: 4),
       if (footer.isNotEmpty)
         ...g.text(
@@ -289,4 +322,25 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
     ];
   }
 
+  /// Línea de 32 guiones para delimitar visualmente la tabla de jugadas.
+  List<int> _dashedLine(Generator g) {
+    const dashed = '--------------------------------';
+    return g.text(dashed, styles: const PosStyles(align: PosAlign.center));
+  }
+
+  /// Ajusta [s] a exactamente [width] chars: trunca si es más largo,
+  /// rellena con espacios si es más corto. [left] = true → alineación
+  /// izquierda; false → alineación derecha.
+  static String _colFit(String s, int width, {required bool left}) {
+    if (s.length >= width) return s.substring(0, width);
+    return left ? s.padRight(width) : s.padLeft(width);
+  }
+
+  /// Centra [s] dentro de [width] chars, rellena con espacios.
+  static String _colCenter(String s, int width) {
+    if (s.length >= width) return s.substring(0, width);
+    final pad = width - s.length;
+    final lPad = pad ~/ 2;
+    return '${' ' * lPad}$s${' ' * (pad - lPad)}';
+  }
 }

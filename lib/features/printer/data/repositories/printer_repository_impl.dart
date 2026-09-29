@@ -78,9 +78,9 @@ class PrinterRepositoryImpl implements PrinterRepository {
   }
 
   @override
-  Future<Either<Failure, Unit>> printTicket(String address, TicketPayload payload) async {
+  Future<Either<Failure, Unit>> printTicket(String address, TicketPayload payload, {bool isSmartPos = false}) async {
     try {
-      await datasource.printTicket(address, payload);
+      await datasource.printTicket(address, payload, isSmartPos: isSmartPos);
       return const Right(unit);
     } catch (e) {
       return Left(UnexpectedFailure(e.toString()));
@@ -101,7 +101,7 @@ class PrinterRepositoryImpl implements PrinterRepository {
   Future<Either<Failure, Unit>> saveLastConnected(PrinterDevice device) async {
     try {
       await local.saveLastConnected(
-        PrinterDeviceModel(name: device.name, address: device.address),
+        PrinterDeviceModel(name: device.name, address: device.address, isSmartPos: device.isSmartPos),
       );
       return const Right(unit);
     } catch (e) {

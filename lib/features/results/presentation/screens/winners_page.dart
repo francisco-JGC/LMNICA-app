@@ -15,6 +15,21 @@ import '../state/winners_controller.dart';
 class WinnersPage extends ConsumerWidget {
   const WinnersPage({super.key});
 
+  void _showDetailSheet(
+    BuildContext context,
+    WinningTicket ticket,
+    Game? game,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _WinnerDetailSheet(ticket: ticket, game: game),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(winnersControllerProvider);
@@ -100,6 +115,11 @@ class WinnersPage extends ConsumerWidget {
                         itemBuilder: (context, i) => _WinnerTile(
                           ticket: items[i],
                           game: gamesById[items[i].gameId],
+                          onTap: () => _showDetailSheet(
+                            context,
+                            items[i],
+                            gamesById[items[i].gameId],
+                          ),
                         ),
                       ),
                     ),
@@ -175,18 +195,26 @@ class _TotalCell extends StatelessWidget {
   }
 }
 
-class _WinnerTile extends ConsumerWidget {
-  const _WinnerTile({required this.ticket, required this.game});
+class _WinnerTile extends StatelessWidget {
+  const _WinnerTile({
+    required this.ticket,
+    required this.game,
+    required this.onTap,
+  });
 
   final WinningTicket ticket;
   final Game? game;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dateFmt = DateFormat('dd/MM/yyyy');
     return Card(
-      child: Padding(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -265,6 +293,108 @@ class _WinnerTile extends ConsumerWidget {
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WinnerDetailSheet extends StatelessWidget {
+  const _WinnerDetailSheet({required this.ticket, required this.game});
+
+  final WinningTicket ticket;
+  final Game? game;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final winningLines = ticket.lines.where((l) => l.isWinner).toList();
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        game?.name ?? '—',
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      Text(
+                        'Folio #${ticket.folio}',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: Colors.grey.shade600),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Text(
+                    kCurrencyFormat.format(ticket.totalPrize),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                      color: Colors.orange.shade800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Jugadas ganadoras',
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: Colors.grey.shade600,
+                letterSpacing: 0.8,
+              ),
+            ),
+            const SizedBox(height: 6),
+            for (final line in winningLines)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle,
+                        size: 16, color: Colors.green.shade600),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        [
+                          if (line.subGameName != null)
+                            '${line.subGameName} — ',
+                          line.label,
+                          if (line.winningNumber != null)
+                            ' (sorteo: ${line.winningNumber})',
+                        ].join(),
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    ),
+                    Text(
+                      kCurrencyFormat.format(line.wonPrize),
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                   ],
                 ),

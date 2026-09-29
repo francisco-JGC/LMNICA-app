@@ -136,15 +136,15 @@ class PrinterController extends Notifier<PrinterState> {
   }
 
   Future<void> printTicket(TicketPayload payload) async {
-    final address = state.connectedDevice?.address;
-    if (address == null) {
+    final device = state.connectedDevice;
+    if (device == null) {
       state = state.copyWith(errorMessage: 'No hay impresora configurada.');
       return;
     }
     state = state.copyWith(isPrinting: true, clearError: true);
     try {
       final result = await _repository
-          .printTicket(address, payload)
+          .printTicket(device.address, payload, isSmartPos: device.isSmartPos)
           .timeout(const Duration(seconds: 35));
       final failure = result.fold<String?>((f) => f.message, (_) => null);
       state = state.copyWith(isPrinting: false, errorMessage: failure);
@@ -156,8 +156,18 @@ class PrinterController extends Notifier<PrinterState> {
     }
   }
 
+  Future<void> setSmartPos({required bool value}) async {
+    final device = state.connectedDevice;
+    if (device == null) return;
+    final updated = device.copyWith(isSmartPos: value);
+    await _repository.saveLastConnected(updated);
+    state = state.copyWith(connectedDevice: updated);
+  }
+
   void resetPrintingState() {
-    state = state.copyWith(isPrinting: false);
+    if (state.isPrinting) {
+      state = state.copyWith(isPrinting: false, errorMessage: 'Impresión cancelada.');
+    }
   }
 
   /// Verifica si hay una impresora configurada. Con el modelo connect-to-print

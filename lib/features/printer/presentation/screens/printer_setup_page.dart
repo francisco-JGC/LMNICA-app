@@ -97,7 +97,11 @@ class _Body extends StatelessWidget {
         ],
         if (state.isConnected) ...[
           const SizedBox(height: 16),
-          _ActionsBar(state: state, controller: controller),
+          _ActionsBar(
+            state: state,
+            controller: controller,
+            isSmartPos: state.connectedDevice?.isSmartPos ?? false,
+          ),
         ],
         const SizedBox(height: 32),
       ],
@@ -201,10 +205,15 @@ class _DeviceTile extends StatelessWidget {
 }
 
 class _ActionsBar extends StatelessWidget {
-  const _ActionsBar({required this.state, required this.controller});
+  const _ActionsBar({
+    required this.state,
+    required this.controller,
+    required this.isSmartPos,
+  });
 
   final PrinterState state;
   final PrinterController controller;
+  final bool isSmartPos;
 
   @override
   Widget build(BuildContext context) {
@@ -212,6 +221,16 @@ class _ActionsBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
+          SwitchListTile(
+            title: const Text('Modo SmartPOS'),
+            subtitle: const Text(
+              'Actívalo si la impresora integrada imprime solo el 50% del papel',
+            ),
+            value: isSmartPos,
+            onChanged: (v) => controller.setSmartPos(value: v),
+            contentPadding: EdgeInsets.zero,
+          ),
+          const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
