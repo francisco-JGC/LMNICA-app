@@ -30,7 +30,8 @@ class TicketImageShareService {
     required TicketPayload payload,
   }) async {
     try {
-      final bytes = await _capture(context, payload);
+      final bytes =
+          await _capture(context, payload).timeout(const Duration(seconds: 6));
       if (bytes == null) return false;
 
       final tempDir = await getTemporaryDirectory();
@@ -38,14 +39,16 @@ class TicketImageShareService {
       final file = File('${tempDir.path}/ticket-$safeFolio.png');
       await file.writeAsBytes(bytes);
 
-      await Share.shareXFiles(
+      // No esperamos el share sheet — se bloquea hasta que el usuario
+      // descarta la hoja nativa, lo que congela el spinner indefinidamente.
+      unawaited(Share.shareXFiles(
         [XFile(file.path, mimeType: 'image/png')],
         // Caption mínimo: solo el folio para que el receptor tenga
         // referencia si le llegan varios tickets. Toda la info del ticket
         // está en la imagen — no duplicamos acá.
         text: 'Ticket #${payload.folio}',
         subject: 'Ticket #${payload.folio}',
-      );
+      ));
       return true;
     } catch (e) {
       // El caller ya loggea o muestra snackbar según necesite. Acá tragamos

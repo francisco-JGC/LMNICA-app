@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../../core/di/injection.dart';
+import '../../../../core/utils/prize.dart';
+import '../../../game_prizes/presentation/state/effective_game_prizes_provider.dart';
 import '../../../games/domain/entities/game.dart';
 import '../../../games/domain/entities/game_type.dart';
 import '../../../games/presentation/state/games_controller.dart';
@@ -210,8 +212,9 @@ class _ScanTicketPageState extends ConsumerState<ScanTicketPage>
             .read(gana3CartControllerProvider(widget.game.id).notifier)
             .clear();
       case GameType.fourDigit:
+        final scanMultiplier = ref.read(effectiveGamePrizeForGameProvider(widget.game.id))?.exactMultiplier ?? kComboMultiplier;
         ref
-            .read(comboCartControllerProvider(widget.game.id).notifier)
+            .read(comboCartControllerProvider((widget.game.id, scanMultiplier)).notifier)
             .clear();
       case GameType.date:
         ref
@@ -257,8 +260,9 @@ class _ScanTicketPageState extends ConsumerState<ScanTicketPage>
   }
 
   int _loadCombo(TicketDetail detail, String? client) {
+    final loadMultiplier = ref.read(effectiveGamePrizeForGameProvider(widget.game.id))?.exactMultiplier ?? kComboMultiplier;
     final notifier =
-        ref.read(comboCartControllerProvider(widget.game.id).notifier);
+        ref.read(comboCartControllerProvider((widget.game.id, loadMultiplier)).notifier);
     int count = 0;
     for (final line in detail.lines) {
       final n = int.tryParse(line.label);

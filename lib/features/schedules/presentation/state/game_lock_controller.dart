@@ -10,7 +10,7 @@ import '../../domain/entities/draw_schedule.dart';
 import '../../domain/repositories/schedules_repository.dart';
 
 const _postDrawGraceMinutes = 3;
-const _tickInterval = Duration(seconds: 15);
+const _tickInterval = Duration(seconds: 5);
 
 /// Cierre nocturno: después del último sorteo del día, el juego queda
 /// bloqueado hasta esta hora (business time, Managua) del día siguiente.
@@ -109,6 +109,8 @@ class GameLockController extends Notifier<GameLockState> {
     );
   }
 
+  void recompute() => _recompute();
+
   void _recompute() {
     final schedules = _schedules;
     if (schedules == null) return;
@@ -158,6 +160,17 @@ class GameLockController extends Notifier<GameLockState> {
             .where((x) =>
                 !x.isNightly && x.drawAt.isAfter(w.drawAt))
             .fold<_Window?>(null, (acc, x) => acc ?? x);
+        // Bridge nightly: si el lockEnd de un sorteo regular coincide con
+        // el lockStart de la ventana nocturna (≤1 min de diferencia), el
+        // usuario vería un reopenAt de apenas 3 minutos. En ese caso,
+        // mostramos el reopen de la nocturna (06:00 del día siguiente).
+        final bridgedNightly = w.isNightly
+            ? null
+            : windows.where((x) =>
+                x.isNightly &&
+                x.lockStart.difference(w.lockEnd).abs() <=
+                    const Duration(minutes: 1)).fold<_Window?>(
+                null, (acc, x) => acc ?? x);
         state = GameLockState(
           status: GameLockStatus.locked,
           // En cierre nocturno no hay sorteo real "actual" — omitimos
@@ -165,10 +178,10 @@ class GameLockController extends Notifier<GameLockState> {
           // el mensaje adecuado.
           currentDrawAt: w.isNightly ? null : w.drawAt,
           currentCutoffMinutes: w.isNightly ? null : w.cutoffMinutes,
-          reopenAt: w.lockEnd,
+          reopenAt: bridgedNightly?.lockEnd ?? w.lockEnd,
           nextDrawAt: next?.drawAt,
           nextCutoffMinutes: next?.cutoffMinutes,
-          isNightly: w.isNightly,
+          isNightly: w.isNightly || bridgedNightly != null,
         );
         return;
       }

@@ -7,9 +7,11 @@ import 'cart_controller.dart';
 import 'combo_cart_state.dart';
 
 class ComboCartController extends Notifier<ComboCartState> {
-  ComboCartController(this.gameId);
+  ComboCartController(this._key);
 
-  final String gameId;
+  final (String, int) _key;
+  String get gameId => _key.$1;
+  int get _multiplier => _key.$2;
 
   @override
   ComboCartState build() => const ComboCartState();
@@ -22,7 +24,9 @@ class ComboCartController extends Notifier<ComboCartState> {
     if (number < 0 || number > 9999) return AddBetOutcome.invalid;
     if (amount < 1 || amount > 999) return AddBetOutcome.invalid;
     state = ComboCartState(
-      bets: _merge(state.bets, [ComboBet(number: number, amount: amount)]),
+      bets: _merge(state.bets, [
+        ComboBet(number: number, amount: amount, multiplier: _multiplier),
+      ]),
       client: _clean(client) ?? state.client,
     );
     return AddBetOutcome.added;
@@ -36,7 +40,8 @@ class ComboCartController extends Notifier<ComboCartState> {
     if (start < 0 || end > 9999 || end < start) return;
     if (amount < 1 || amount > 999) return;
     final incoming = [
-      for (var n = start; n <= end; n++) ComboBet(number: n, amount: amount),
+      for (var n = start; n <= end; n++)
+        ComboBet(number: n, amount: amount, multiplier: _multiplier),
     ];
     state = ComboCartState(
       bets: _merge(state.bets, incoming),
@@ -51,8 +56,9 @@ class ComboCartController extends Notifier<ComboCartState> {
     while (numbers.length < count.clamp(1, 10000)) {
       numbers.add(random.nextInt(10000));
     }
-    final incoming =
-        numbers.map((n) => ComboBet(number: n, amount: amount)).toList();
+    final incoming = numbers
+        .map((n) => ComboBet(number: n, amount: amount, multiplier: _multiplier))
+        .toList();
     state = ComboCartState(
       bets: _merge(state.bets, incoming),
       client: state.client,
@@ -67,6 +73,7 @@ class ComboCartController extends Notifier<ComboCartState> {
         result[i] = ComboBet(
           number: b.number,
           amount: result[i].amount + b.amount,
+          multiplier: b.multiplier,
         );
       } else {
         result.add(b);
@@ -100,4 +107,4 @@ class ComboCartController extends Notifier<ComboCartState> {
 }
 
 final comboCartControllerProvider = NotifierProvider.family<
-    ComboCartController, ComboCartState, String>(ComboCartController.new);
+    ComboCartController, ComboCartState, (String, int)>(ComboCartController.new);

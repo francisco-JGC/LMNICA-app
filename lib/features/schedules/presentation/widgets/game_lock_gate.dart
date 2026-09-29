@@ -23,7 +23,7 @@ class GameLockGate extends ConsumerWidget {
     return Stack(
       children: [
         child,
-        if (state.isLocked) _LockOverlay(state: state),
+        if (state.isLocked) AbsorbPointer(child: _LockOverlay(state: state)),
       ],
     );
   }
@@ -155,7 +155,7 @@ class _CountdownTextState extends State<_CountdownText> {
   }
 
   String _format(Duration d) {
-    if (widget.longFormat && d.inHours >= 1) {
+    if (d.inHours >= 1) {
       final h = d.inHours;
       final m = d.inMinutes.remainder(60);
       return '$h h $m min';

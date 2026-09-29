@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -119,9 +121,18 @@ class PrinterController extends Notifier<PrinterState> {
       return;
     }
     state = state.copyWith(isPrinting: true, clearError: true);
-    final result = await _repository.printTest(address);
-    final failure = result.fold<String?>((f) => f.message, (_) => null);
-    state = state.copyWith(isPrinting: false, errorMessage: failure);
+    try {
+      final result = await _repository
+          .printTest(address)
+          .timeout(const Duration(seconds: 35));
+      final failure = result.fold<String?>((f) => f.message, (_) => null);
+      state = state.copyWith(isPrinting: false, errorMessage: failure);
+    } on TimeoutException {
+      state = state.copyWith(
+        isPrinting: false,
+        errorMessage: 'Tiempo de espera agotado al imprimir.',
+      );
+    }
   }
 
   Future<void> printTicket(TicketPayload payload) async {
@@ -131,9 +142,22 @@ class PrinterController extends Notifier<PrinterState> {
       return;
     }
     state = state.copyWith(isPrinting: true, clearError: true);
-    final result = await _repository.printTicket(address, payload);
-    final failure = result.fold<String?>((f) => f.message, (_) => null);
-    state = state.copyWith(isPrinting: false, errorMessage: failure);
+    try {
+      final result = await _repository
+          .printTicket(address, payload)
+          .timeout(const Duration(seconds: 35));
+      final failure = result.fold<String?>((f) => f.message, (_) => null);
+      state = state.copyWith(isPrinting: false, errorMessage: failure);
+    } on TimeoutException {
+      state = state.copyWith(
+        isPrinting: false,
+        errorMessage: 'Tiempo de espera agotado al imprimir.',
+      );
+    }
+  }
+
+  void resetPrintingState() {
+    state = state.copyWith(isPrinting: false);
   }
 
   /// Verifica si hay una impresora configurada. Con el modelo connect-to-print
