@@ -536,6 +536,7 @@ class _TicketMenu extends ConsumerWidget {
       drawAt: summary.drawAt,
       seller: seller,
       client: summary.client,
+      salePoint: summary.salePointName,
     );
   }
 }
