@@ -105,30 +105,16 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
     }
   }
 
-  // MTU típico de BT SPP en Android es 512 bytes. Enviar payloads grandes
-  // de una sola vez llena el buffer del driver y los bytes sobrantes se
-  // descartan silenciosamente — el ticket queda cortado. Fragmentamos en
-  // chunks y damos un pequeño respiro entre ellos para que el hardware
-  // drene el buffer antes del siguiente envío.
-  static const _kChunkSize = 512;
-  static const _kChunkDelayMs = 20;
-
   Future<void> _write(List<int> bytes) async {
-    for (var offset = 0; offset < bytes.length; offset += _kChunkSize) {
-      final end = (offset + _kChunkSize).clamp(0, bytes.length);
-      final chunk = bytes.sublist(offset, end);
-      final ok = await PrintBluetoothThermal.writeBytes(chunk)
-          .timeout(_kWriteTimeout, onTimeout: () => false);
-      if (!ok) {
-        throw Exception('No fue posible enviar los datos a la impresora');
-      }
-      if (end < bytes.length) {
-        await Future<void>.delayed(const Duration(milliseconds: _kChunkDelayMs));
-      }
+    final ok = await PrintBluetoothThermal.writeBytes(bytes)
+        .timeout(_kWriteTimeout, onTimeout: () => false);
+    if (!ok) {
+      throw Exception('No fue posible enviar los datos a la impresora');
     }
-    // Esperamos a que la impresora termine de procesar. ~40 bytes/ms es
-    // conservador para 58mm a 80 mm/s; mínimo 1.5 s, máximo 12 s para
-    // tickets muy grandes.
+    // `writeBytes` retorna cuando los bytes llegan al buffer BT, no cuando
+    // la impresora termina de procesarlos. Esperamos proporcional al tamaño:
+    // ~40 bytes/ms es conservador para 58mm a 80 mm/s; mínimo 1.5 s,
+    // máximo 12 s para tickets muy grandes.
     final waitMs = (bytes.length / 40).ceil().clamp(1500, 12000);
     await Future<void>.delayed(Duration(milliseconds: waitMs));
   }

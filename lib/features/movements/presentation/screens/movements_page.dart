@@ -17,10 +17,8 @@ const _kAllTypes = '__all__';
 
 const _typeOptions = [
   (_kAllTypes, 'Todos'),
-  ('expense', 'Gasto'),
-  ('deposit', 'Depósito / Cobro'),
-  ('withdrawal', 'Retiro / Crédito'),
-  ('adjustment', 'Ajuste'),
+  ('deposit', 'Cobro'),
+  ('adjustment', 'Ajuste de premio'),
 ];
 
 (IconData, Color, String) _typeMeta(String type, bool isPrizePayment) {
@@ -29,7 +27,7 @@ const _typeOptions = [
   }
   return switch (type) {
     'expense'    => (Icons.arrow_downward, const Color(0xFFE11D48), 'Gasto'),
-    'deposit'    => (Icons.arrow_upward, const Color(0xFF059669), 'Depósito'),
+    'deposit'    => (Icons.arrow_upward, const Color(0xFF059669), 'Cobro'),
     'withdrawal' => (Icons.account_balance_wallet, const Color(0xFF2563EB), 'Retiro'),
     'opening'    => (Icons.door_front_door_outlined, const Color(0xFF64748B), 'Apertura'),
     'closing'    => (Icons.door_back_door_outlined, const Color(0xFF64748B), 'Cierre'),
