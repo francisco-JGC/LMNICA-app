@@ -278,7 +278,8 @@ class _ScanTicketPageState extends ConsumerState<ScanTicketPage>
         ref.read(dateCartControllerProvider(widget.game.id).notifier);
     int count = 0;
     for (final line in detail.lines) {
-      final parts = line.label.split('-');
+      // El label se genera como '$dayLabel $monthLabel' (espacio, no guión).
+      final parts = line.label.split(' ');
       if (parts.length != 2) continue;
       final day = int.tryParse(parts[0]);
       final monthIndex = kMonthAbbreviations.indexOf(parts[1]);
