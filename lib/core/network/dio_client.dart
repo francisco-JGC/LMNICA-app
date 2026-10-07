@@ -3,27 +3,23 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:logger/logger.dart';
 
 import 'auth_interceptor.dart';
+import 'network_constants.dart';
 import 'token_store.dart';
 
 class DioClient {
   DioClient({
     required TokenStore tokenStore,
-    required Future<void> Function(String newAccessToken) onRefreshed,
+    required Future<void> Function(String accessToken, String refreshToken)
+        onRefreshed,
     required void Function() onSessionExpired,
     Logger? logger,
   }) : _logger = logger ?? Logger() {
     _dio = Dio(
       BaseOptions(
         baseUrl: _baseUrl(),
-        // Timeouts pensados para operar con datos móviles flakeados y
-        // hosting con cold-start (Railway/Render suspenden la instancia
-        // por inactividad; despertar puede tomar 15-25s la primera
-        // request de la mañana). Antes eran 15s de connect y 20s de
-        // receive/send — se veía como TimeoutException para el vendedor
-        // aunque la operación fuera legítima.
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 30),
-        sendTimeout: const Duration(seconds: 30),
+        connectTimeout: kNetworkConnectTimeout,
+        receiveTimeout: kNetworkReceiveTimeout,
+        sendTimeout: kNetworkSendTimeout,
         headers: {'Content-Type': 'application/json'},
       ),
     );

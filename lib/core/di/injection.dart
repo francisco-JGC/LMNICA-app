@@ -90,16 +90,21 @@ Future<void> configureDependencies() async {
     () => DioClient(
       tokenStore: getIt(),
       logger: getIt(),
-      onRefreshed: (newAccessToken) async {
-        getIt<TokenStore>().updateAccessToken(newAccessToken);
-        // Rewrite the persisted session so a cold start after refresh
-        // doesn't fall back to the now-invalid old access token.
+      onRefreshed: (accessToken, refreshToken) async {
+        getIt<TokenStore>().updateTokens(
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+        );
+        // Reescribimos la sesión persistida para que un arranque en frío
+        // después del refresh no vuelva a los tokens viejos. Van los DOS:
+        // el backend rota el refresh token en cada llamada y quedarse con
+        // el original le pone fecha de vencimiento fija a la sesión.
         final existing = await getIt<AuthLocalDatasource>().read();
         if (existing == null) return;
         await getIt<AuthLocalDatasource>().save(
           AuthSessionModel(
-            accessToken: newAccessToken,
-            refreshToken: existing.refreshToken,
+            accessToken: accessToken,
+            refreshToken: refreshToken,
             user: existing.user as AuthenticatedUserModel,
           ),
         );

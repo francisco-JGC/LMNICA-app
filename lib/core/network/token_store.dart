@@ -16,10 +16,15 @@ class TokenStore {
     _refreshToken = refreshToken;
   }
 
-  /// Called by the interceptor after a successful silent refresh. Refresh
-  /// token stays the same — the backend only rotates the short-lived one.
-  void updateAccessToken(String accessToken) {
+  /// Called by the interceptor after a successful silent refresh.
+  ///
+  /// Ambos tokens se reemplazan: el backend rota también el refresh token
+  /// en cada llamada a /auth/refresh. Guardar solo el access y conservar el
+  /// refresh original hace que la sesión caduque a fecha fija desde el
+  /// login en vez de extenderse con el uso.
+  void updateTokens({required String accessToken, required String refreshToken}) {
     _accessToken = accessToken;
+    _refreshToken = refreshToken;
   }
 
   void clear() {
