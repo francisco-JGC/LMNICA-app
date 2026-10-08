@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/di/injection.dart';
-import '../../../../core/network/network_constants.dart';
 import '../../../../core/session/current_user.dart';
 import '../../../../core/utils/currency.dart';
 import '../../../../core/utils/prize.dart';
@@ -1663,17 +1662,14 @@ Future<void> _persistAndPrintInner(
     );
   }).toList();
 
-  // Validate per-number minimum amounts before submitting.
-  // Fails silently on network error — backend still enforces on server side.
-  //
-  // Timeout corto porque esta validación es un lujo: corre con el botón ya
-  // girando, y el backend valida igual. Sin tope, una red lenta suma su
-  // espera completa a la de las otras llamadas previas a la venta y el
-  // vendedor ve el spinner durante minutos antes de que se imprima nada.
+  // Monto mínimo por número. OJO: el backend NO valida esto — create-ticket
+  // solo aplica `enforceSaleLimit` (tope por número y cuotas por vendedor).
+  // Esta pantalla es el único lugar donde el mínimo se hace cumplir, así
+  // que no se le puede poner un timeout corto ni dejarla caer en silencio
+  // por lentitud: se esperaría a que el backend valide y no lo hace.
   final minAmounts = await getIt<SaleLimitsRepository>()
       .getMinAmountsByNumber(gameId: game.id, salePointId: salePoint.id)
-      .then((r) => r.fold((_) => <String, int>{}, (m) => m))
-      .timeout(kPreSaleCheckTimeout, onTimeout: () => <String, int>{});
+      .then((r) => r.fold((_) => <String, int>{}, (m) => m));
   for (final line in requestLines) {
     final min = minAmounts[line.label];
     if (min != null && line.amount < min) {
@@ -1687,21 +1683,19 @@ Future<void> _persistAndPrintInner(
   }
 
   // Validate per-ticket maximum: each line must not exceed maxPerTicket.
-  // Fails silently on network error — backend still enforces.
   final resolvedDrawAt = drawAt ?? lock.nextDrawAt;
   if (resolvedDrawAt != null) {
-    // Mismo criterio que el mínimo por número: validación best-effort con
-    // tope de tiempo, el backend es la autoridad.
-    final maxPerTicket = await getIt<SaleLimitsRepository>()
-        .getAvailability(
-          SaleLimitAvailabilityQuery(
-            gameId: game.id,
-            salePointId: salePoint.id,
-            drawAt: resolvedDrawAt,
-          ),
-        )
-        .then<int?>((r) => r.fold((_) => null, (a) => a.maxPerTicket))
-        .timeout(kPreSaleCheckTimeout, onTimeout: () => null);
+    // Máximo por boleto. Mismo caso que el mínimo de arriba: el backend no
+    // lo valida, esta es la única barrera.
+    final availResult = await getIt<SaleLimitsRepository>().getAvailability(
+      SaleLimitAvailabilityQuery(
+        gameId: game.id,
+        salePointId: salePoint.id,
+        drawAt: resolvedDrawAt,
+      ),
+    );
+    final maxPerTicket =
+        availResult.fold((_) => null, (a) => a.maxPerTicket);
     if (maxPerTicket != null) {
       for (final line in requestLines) {
         if (line.amount > maxPerTicket) {
