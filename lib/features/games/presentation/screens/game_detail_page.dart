@@ -1634,12 +1634,40 @@ Future<void> _persistAndPrintInner(
         .verifyConnectedOrReconnect();
   }
 
+  final resolvedDrawAt = drawAt ?? lock.nextDrawAt;
+
+  // Las tres consultas previas a la venta no dependen una de otra, así que
+  // se disparan juntas y se esperan después. En serie eran tres viajes al
+  // servidor encadenados con el botón Imprimir ya girando; en paralelo el
+  // costo es el de la más lenta.
+  //
+  // Cada una absorbe su propio error para que, si la primera que
+  // esperamos falla, las otras no queden como futures huérfanos con
+  // excepción sin capturar.
+  final prizesFuture =
+      ref.read(effectiveGamePrizesProvider(salePoint.id).future);
+  final minAmountsFuture = getIt<SaleLimitsRepository>()
+      .getMinAmountsByNumber(gameId: game.id, salePointId: salePoint.id)
+      .then((r) => r.fold((_) => <String, int>{}, (m) => m))
+      .catchError((_) => <String, int>{});
+  final maxPerTicketFuture = resolvedDrawAt == null
+      ? Future<int?>.value()
+      : getIt<SaleLimitsRepository>()
+          .getAvailability(
+            SaleLimitAvailabilityQuery(
+              gameId: game.id,
+              salePointId: salePoint.id,
+              drawAt: resolvedDrawAt,
+            ),
+          )
+          .then<int?>((r) => r.fold((_) => null, (a) => a.maxPerTicket))
+          .catchError((_) => null);
+
   // Rescale line prizes if this sucursal has per-game overrides. We look
   // up the effective multipliers, then for each line detect whether the
   // caller used the "main" or "secondary" default and swap it for the
   // override. Custom prizes matching neither default pass through unchanged.
-  final prizesAsync =
-      await ref.read(effectiveGamePrizesProvider(salePoint.id).future);
+  final prizesAsync = await prizesFuture;
   final prizeByGameId = <String, EffectiveGamePrize>{
     for (final p in prizesAsync) p.gameId: p,
   };
@@ -1664,12 +1692,8 @@ Future<void> _persistAndPrintInner(
 
   // Monto mínimo por número. OJO: el backend NO valida esto — create-ticket
   // solo aplica `enforceSaleLimit` (tope por número y cuotas por vendedor).
-  // Esta pantalla es el único lugar donde el mínimo se hace cumplir, así
-  // que no se le puede poner un timeout corto ni dejarla caer en silencio
-  // por lentitud: se esperaría a que el backend valide y no lo hace.
-  final minAmounts = await getIt<SaleLimitsRepository>()
-      .getMinAmountsByNumber(gameId: game.id, salePointId: salePoint.id)
-      .then((r) => r.fold((_) => <String, int>{}, (m) => m));
+  // Esta pantalla es el único lugar donde el mínimo se hace cumplir.
+  final minAmounts = await minAmountsFuture;
   for (final line in requestLines) {
     final min = minAmounts[line.label];
     if (min != null && line.amount < min) {
@@ -1683,19 +1707,10 @@ Future<void> _persistAndPrintInner(
   }
 
   // Validate per-ticket maximum: each line must not exceed maxPerTicket.
-  final resolvedDrawAt = drawAt ?? lock.nextDrawAt;
+  // Mismo caso que el mínimo de arriba: el backend no lo valida, esta es
+  // la única barrera.
   if (resolvedDrawAt != null) {
-    // Máximo por boleto. Mismo caso que el mínimo de arriba: el backend no
-    // lo valida, esta es la única barrera.
-    final availResult = await getIt<SaleLimitsRepository>().getAvailability(
-      SaleLimitAvailabilityQuery(
-        gameId: game.id,
-        salePointId: salePoint.id,
-        drawAt: resolvedDrawAt,
-      ),
-    );
-    final maxPerTicket =
-        availResult.fold((_) => null, (a) => a.maxPerTicket);
+    final maxPerTicket = await maxPerTicketFuture;
     if (maxPerTicket != null) {
       for (final line in requestLines) {
         if (line.amount > maxPerTicket) {
