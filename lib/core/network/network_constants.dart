@@ -22,10 +22,28 @@ const kAuthRefreshPath = '/auth/refresh';
 /// request tras un 401.
 const kAuthRetriedKey = '_authRetried';
 
+/// Timeout del POST /auth/refresh. Más corto que el de los requests
+/// normales a propósito: el refresh es un request diminuto, y encima corre
+/// DETRÁS del spinner de una acción del usuario (vender e imprimir). Si no
+/// contesta en este plazo, reintentar es mejor que seguir esperando.
+const kAuthRefreshTimeout = Duration(seconds: 12);
+
 /// Backoff entre reintentos cuando el refresh falla por algo transitorio
 /// (red, timeout, 5xx). Un rechazo explícito del backend no se reintenta.
 /// El largo de la lista define la cantidad de reintentos.
+///
+/// Un solo reintento a propósito: no perder la sesión ya está garantizado
+/// por tratar el fallo transitorio como "no se pudo preguntar" en vez de
+/// "sesión muerta". Los reintentos solo salvan el request en curso, y cada
+/// uno se paga en segundos de botón girando.
+///
+/// Peor caso total: 12s + 800ms + 12s ≈ 25s.
 const kAuthRefreshRetryDelays = <Duration>[
   Duration(milliseconds: 800),
-  Duration(milliseconds: 2400),
 ];
+
+/// Tope de las validaciones best-effort previas a registrar una venta
+/// (mínimo por número, máximo por boleto). Corren con el botón Imprimir ya
+/// girando y el backend las vuelve a aplicar igual, así que es preferible
+/// seguir adelante antes que hacer esperar al vendedor.
+const kPreSaleCheckTimeout = Duration(seconds: 6);

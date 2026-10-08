@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/di/injection.dart';
+import '../../../../core/network/network_constants.dart';
 import '../../../../core/session/current_user.dart';
 import '../../../../core/utils/currency.dart';
 import '../../../../core/utils/prize.dart';
@@ -223,13 +224,13 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
       case GameType.date:
         final ctrl = ref.read(dateCartControllerProvider(game.id).notifier);
         for (final l in lines) {
-          // DateBet.label format: "01 ene" (padded day + space + abbreviation).
-          final parts = l.label.trim().split(' ');
-          if (parts.length != 2) continue;
-          final day = int.tryParse(parts[0]);
-          final monthIdx = kMonthAbbreviations.indexOf(parts[1].toLowerCase());
-          if (day == null || monthIdx < 0) continue;
-          ctrl.addSingle(day: day, month: monthIdx + 1, amount: l.amount);
+          final parsed = DateBet.tryParseLabel(l.label);
+          if (parsed == null) continue;
+          ctrl.addSingle(
+            day: parsed.day,
+            month: parsed.month,
+            amount: l.amount,
+          );
         }
       case GameType.multiSorteo:
         break;
@@ -1565,8 +1566,18 @@ Future<void> _persistAndPrint(
   // reentry aunque el rebuild del provider aún no haya llegado al widget.
   if (_submissionInFlight) return;
   _submissionInFlight = true;
-  // Y el provider además, para que el botón cambie visualmente a disabled.
-  ref.read(ticketSubmittingProvider.notifier).setValue(true);
+
+  // Capturamos el notifier ANTES de empezar, y no volvemos a tocar `ref`
+  // después del await.
+  //
+  // `ticketSubmittingProvider` no es autoDispose, así que el notifier
+  // sobrevive aunque la pantalla se desmonte; el WidgetRef no. Si el
+  // vendedor se cansa de esperar y toca "atrás" en medio de la venta, un
+  // `ref.read()` en el finally lanza y el flag de "vendiendo" queda en
+  // true PARA TODA LA APP: a partir de ahí el botón Imprimir de cualquier
+  // juego aparece deshabilitado y girando hasta reiniciar.
+  final submitting = ref.read(ticketSubmittingProvider.notifier);
+  submitting.setValue(true);
   try {
     await _persistAndPrintInner(
       context,
@@ -1581,7 +1592,7 @@ Future<void> _persistAndPrint(
     );
   } finally {
     _submissionInFlight = false;
-    ref.read(ticketSubmittingProvider.notifier).setValue(false);
+    submitting.setValue(false);
   }
 }
 
@@ -1654,9 +1665,15 @@ Future<void> _persistAndPrintInner(
 
   // Validate per-number minimum amounts before submitting.
   // Fails silently on network error — backend still enforces on server side.
+  //
+  // Timeout corto porque esta validación es un lujo: corre con el botón ya
+  // girando, y el backend valida igual. Sin tope, una red lenta suma su
+  // espera completa a la de las otras llamadas previas a la venta y el
+  // vendedor ve el spinner durante minutos antes de que se imprima nada.
   final minAmounts = await getIt<SaleLimitsRepository>()
       .getMinAmountsByNumber(gameId: game.id, salePointId: salePoint.id)
-      .then((r) => r.fold((_) => <String, int>{}, (m) => m));
+      .then((r) => r.fold((_) => <String, int>{}, (m) => m))
+      .timeout(kPreSaleCheckTimeout, onTimeout: () => <String, int>{});
   for (final line in requestLines) {
     final min = minAmounts[line.label];
     if (min != null && line.amount < min) {
@@ -1673,15 +1690,18 @@ Future<void> _persistAndPrintInner(
   // Fails silently on network error — backend still enforces.
   final resolvedDrawAt = drawAt ?? lock.nextDrawAt;
   if (resolvedDrawAt != null) {
-    final availResult = await getIt<SaleLimitsRepository>().getAvailability(
-      SaleLimitAvailabilityQuery(
-        gameId: game.id,
-        salePointId: salePoint.id,
-        drawAt: resolvedDrawAt,
-      ),
-    );
-    final maxPerTicket =
-        availResult.fold((_) => null, (a) => a.maxPerTicket);
+    // Mismo criterio que el mínimo por número: validación best-effort con
+    // tope de tiempo, el backend es la autoridad.
+    final maxPerTicket = await getIt<SaleLimitsRepository>()
+        .getAvailability(
+          SaleLimitAvailabilityQuery(
+            gameId: game.id,
+            salePointId: salePoint.id,
+            drawAt: resolvedDrawAt,
+          ),
+        )
+        .then<int?>((r) => r.fold((_) => null, (a) => a.maxPerTicket))
+        .timeout(kPreSaleCheckTimeout, onTimeout: () => null);
     if (maxPerTicket != null) {
       for (final line in requestLines) {
         if (line.amount > maxPerTicket) {

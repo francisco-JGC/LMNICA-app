@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/di/injection.dart';
+import '../../data/datasources/printer_constants.dart';
 import '../../domain/entities/printer_device.dart';
 import '../../domain/entities/ticket_payload.dart';
 import '../../domain/repositories/printer_repository.dart';
@@ -104,6 +105,15 @@ class PrinterController extends Notifier<PrinterState> {
     state = state.copyWith(isConnecting: false, connectedDevice: device);
   }
 
+  /// Activa/desactiva el modo SmartPOS para la impresora configurada.
+  Future<void> setSmartPos({required bool value}) async {
+    final device = state.connectedDevice;
+    if (device == null) return;
+    final updated = device.copyWith(isSmartPos: value);
+    await _repository.saveLastConnected(updated);
+    state = state.copyWith(connectedDevice: updated);
+  }
+
   /// Olvida la impresora configurada. No hay socket que cerrar.
   Future<void> disconnect() async {
     state = state.copyWith(clearConnectedDevice: true);
@@ -121,17 +131,18 @@ class PrinterController extends Notifier<PrinterState> {
       return;
     }
     state = state.copyWith(isPrinting: true, clearError: true);
+    String? failure;
     try {
-      final result = await _repository
-          .printTest(address)
-          .timeout(const Duration(seconds: 35));
-      final failure = result.fold<String?>((f) => f.message, (_) => null);
-      state = state.copyWith(isPrinting: false, errorMessage: failure);
+      final result =
+          await _repository.printTest(address).timeout(kPrintOperationTimeout);
+      failure = result.fold<String?>((f) => f.message, (_) => null);
     } on TimeoutException {
-      state = state.copyWith(
-        isPrinting: false,
-        errorMessage: 'Tiempo de espera agotado al imprimir.',
-      );
+      failure =
+          'La impresora tardó demasiado. Reiniciá el Bluetooth e intentá de nuevo.';
+    } catch (e) {
+      failure = 'Error al imprimir: $e';
+    } finally {
+      state = state.copyWith(isPrinting: false, errorMessage: failure);
     }
   }
 
@@ -142,31 +153,34 @@ class PrinterController extends Notifier<PrinterState> {
       return;
     }
     state = state.copyWith(isPrinting: true, clearError: true);
+    // El `finally` es lo que garantiza que el botón vuelva a habilitarse.
+    // Sin él, cualquier excepción que no sea TimeoutException deja
+    // isPrinting en true para siempre y el botón queda inutilizable hasta
+    // reiniciar la app.
+    String? failure;
     try {
       final result = await _repository
           .printTicket(device.address, payload, isSmartPos: device.isSmartPos)
-          .timeout(const Duration(seconds: 35));
-      final failure = result.fold<String?>((f) => f.message, (_) => null);
-      state = state.copyWith(isPrinting: false, errorMessage: failure);
+          .timeout(kPrintOperationTimeout);
+      failure = result.fold<String?>((f) => f.message, (_) => null);
     } on TimeoutException {
-      state = state.copyWith(
-        isPrinting: false,
-        errorMessage: 'Tiempo de espera agotado al imprimir.',
-      );
+      failure =
+          'La impresora tardó demasiado. Reiniciá el Bluetooth e intentá de nuevo.';
+    } catch (e) {
+      failure = 'Error al imprimir: $e';
+    } finally {
+      state = state.copyWith(isPrinting: false, errorMessage: failure);
     }
   }
 
-  Future<void> setSmartPos({required bool value}) async {
-    final device = state.connectedDevice;
-    if (device == null) return;
-    final updated = device.copyWith(isSmartPos: value);
-    await _repository.saveLastConnected(updated);
-    state = state.copyWith(connectedDevice: updated);
-  }
-
+  /// Desatasca el botón de impresión si quedó bloqueado (isPrinting=true)
+  /// por un fallo nativo que no llegó al finally del controller.
   void resetPrintingState() {
     if (state.isPrinting) {
-      state = state.copyWith(isPrinting: false, errorMessage: 'Impresión cancelada.');
+      state = state.copyWith(
+        isPrinting: false,
+        errorMessage: 'Impresión cancelada.',
+      );
     }
   }
 

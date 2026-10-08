@@ -190,9 +190,9 @@ class AuthInterceptor extends Interceptor {
       final bareDio = Dio(
         BaseOptions(
           baseUrl: baseUrl,
-          connectTimeout: kNetworkConnectTimeout,
-          receiveTimeout: kNetworkReceiveTimeout,
-          sendTimeout: kNetworkSendTimeout,
+          connectTimeout: kAuthRefreshTimeout,
+          receiveTimeout: kAuthRefreshTimeout,
+          sendTimeout: kAuthRefreshTimeout,
         ),
       );
       final response = await bareDio.post<Map<String, dynamic>>(

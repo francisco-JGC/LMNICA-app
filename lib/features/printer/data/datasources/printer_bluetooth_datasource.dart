@@ -9,6 +9,7 @@ import '../../../../core/utils/currency.dart';
 import '../../../../core/utils/printer_text.dart';
 import '../../domain/entities/ticket_payload.dart';
 import '../models/printer_device_model.dart';
+import 'printer_constants.dart';
 
 abstract interface class PrinterBluetoothDatasource {
   Future<bool> isBluetoothEnabled();
@@ -36,29 +37,20 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
         .toList();
   }
 
-  // Timeouts para los llamados nativos del plugin. Sin esto, `connect()` a
-  // una impresora apagada puede quedar colgado indefinidamente en algunos
-  // devices Android, y el `_isReconnecting` guard del controller impide
-  // que el timer intente de nuevo. Con timeout, forzamos el fallo rápido
-  // y liberamos el ciclo de reconexión.
-  static const _kConnectTimeout = Duration(seconds: 10);
-  static const _kDisconnectTimeout = Duration(seconds: 3);
-  static const _kWriteTimeout = Duration(seconds: 15);
-
   @override
   Future<void> connect(String address) async {
     // Force disconnect first — the plugin can hold a stale handle that
     // makes a fresh connect() return false immediately.
     try {
-      await PrintBluetoothThermal.disconnect.timeout(_kDisconnectTimeout);
+      await PrintBluetoothThermal.disconnect.timeout(kPrinterDisconnectTimeout);
     } catch (_) {
       // Ignore: no active connection or disconnect hung. Continuamos igual.
     }
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await Future<void>.delayed(kPrinterPreConnectDelay);
     final bool ok;
     try {
       ok = await PrintBluetoothThermal.connect(macPrinterAddress: address)
-          .timeout(_kConnectTimeout);
+          .timeout(kPrinterConnectTimeout);
     } on TimeoutException {
       throw Exception(
         'La conexión a la impresora tardó demasiado (¿apagada o fuera de rango?)',
@@ -72,7 +64,7 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
   @override
   Future<void> disconnect() async {
     try {
-      await PrintBluetoothThermal.disconnect.timeout(_kDisconnectTimeout);
+      await PrintBluetoothThermal.disconnect.timeout(kPrinterDisconnectTimeout);
     } on TimeoutException {
       // Silent: el plugin colgó. Nada más que podamos hacer.
     }
@@ -107,7 +99,7 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
 
   Future<void> _write(List<int> bytes) async {
     final ok = await PrintBluetoothThermal.writeBytes(bytes)
-        .timeout(_kWriteTimeout, onTimeout: () => false);
+        .timeout(kPrinterWriteTimeout, onTimeout: () => false);
     if (!ok) {
       throw Exception('No fue posible enviar los datos a la impresora');
     }
@@ -115,7 +107,9 @@ class PrinterBluetoothDatasourceImpl implements PrinterBluetoothDatasource {
     // la impresora termina de procesarlos. Esperamos proporcional al tamaño:
     // ~40 bytes/ms es conservador para 58mm a 80 mm/s; mínimo 1.5 s,
     // máximo 12 s para tickets muy grandes.
-    final waitMs = (bytes.length / 40).ceil().clamp(1500, 12000);
+    final waitMs = (bytes.length / kPrinterPostWriteBytesPerMs)
+        .ceil()
+        .clamp(kPrinterPostWriteMinMs, kPrinterPostWriteMaxMs);
     await Future<void>.delayed(Duration(milliseconds: waitMs));
   }
 
