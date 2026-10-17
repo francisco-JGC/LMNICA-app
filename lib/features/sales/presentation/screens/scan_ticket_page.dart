@@ -212,7 +212,7 @@ class _ScanTicketPageState extends ConsumerState<ScanTicketPage>
             .read(gana3CartControllerProvider(widget.game.id).notifier)
             .clear();
       case GameType.fourDigit:
-        final scanMultiplier = ref.read(effectiveGamePrizeForGameProvider(widget.game.id))?.exactMultiplier ?? kComboMultiplier;
+        final scanMultiplier = ref.read(effectiveGamePrizeForGameProvider(widget.game.id))?.exactMultiplier ?? widget.game.exactMultiplier ?? kComboMultiplier;
         ref
             .read(comboCartControllerProvider((widget.game.id, scanMultiplier)).notifier)
             .clear();
@@ -260,7 +260,7 @@ class _ScanTicketPageState extends ConsumerState<ScanTicketPage>
   }
 
   int _loadCombo(TicketDetail detail, String? client) {
-    final loadMultiplier = ref.read(effectiveGamePrizeForGameProvider(widget.game.id))?.exactMultiplier ?? kComboMultiplier;
+    final loadMultiplier = ref.read(effectiveGamePrizeForGameProvider(widget.game.id))?.exactMultiplier ?? widget.game.exactMultiplier ?? kComboMultiplier;
     final notifier =
         ref.read(comboCartControllerProvider((widget.game.id, loadMultiplier)).notifier);
     int count = 0;

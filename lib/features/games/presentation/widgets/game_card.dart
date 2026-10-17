@@ -140,6 +140,7 @@ class _Fallback extends StatelessWidget {
     'primera': [Color(0xFF102A3A), Color(0xFF071620)],
     'salvadorena': [Color(0xFF2A2010), Color(0xFF141008)],
     'rifas': [Color(0xFF291632), Color(0xFF130A18)],
+    'juga4': [Color(0xFF0A1830), Color(0xFF050C18)],
     'multisorteo': [Color(0xFF1F1F1F), Color(0xFF0A0A0A)],
   };
 

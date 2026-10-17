@@ -156,12 +156,21 @@ class GamesLocalDatasourceImpl implements GamesLocalDatasource {
         orderIndex: 12,
       ),
       GameModel(
+        id: 'juga4',
+        slug: 'juga4',
+        name: 'Juga 4',
+        type: GameType.fourDigit,
+        exactMultiplier: 6000,
+        imagePath: '$_basePath/juga4.webp',
+        orderIndex: 13,
+      ),
+      GameModel(
         id: 'multisorteo',
         slug: 'multisorteo',
         name: 'Multi Sorteo',
         type: GameType.multiSorteo,
         imagePath: '$_basePath/multisorteo.jpeg',
-        orderIndex: 13,
+        orderIndex: 14,
       ),
     ];
   }

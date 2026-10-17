@@ -176,7 +176,7 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
       case GameType.threeDigit:
         ref.read(gana3CartControllerProvider(game.id).notifier).clear();
       case GameType.fourDigit:
-        final preloadClearMultiplier = ref.read(effectiveGamePrizeForGameProvider(game.id))?.exactMultiplier ?? kComboMultiplier;
+        final preloadClearMultiplier = ref.read(effectiveGamePrizeForGameProvider(game.id))?.exactMultiplier ?? game.exactMultiplier ?? kComboMultiplier;
         ref.read(comboCartControllerProvider((game.id, preloadClearMultiplier)).notifier).clear();
       case GameType.date:
         ref.read(dateCartControllerProvider(game.id).notifier).clear();
@@ -212,7 +212,7 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
           }
         }
       case GameType.fourDigit:
-        final preloadMultiplier = ref.read(effectiveGamePrizeForGameProvider(game.id))?.exactMultiplier ?? kComboMultiplier;
+        final preloadMultiplier = ref.read(effectiveGamePrizeForGameProvider(game.id))?.exactMultiplier ?? game.exactMultiplier ?? kComboMultiplier;
         final ctrl = ref.read(comboCartControllerProvider((game.id, preloadMultiplier)).notifier);
         for (final l in lines) {
           final n = int.tryParse(l.label.trim());
@@ -625,7 +625,7 @@ class _MultiSorteoGameViewState
           ),
         );
       case GameType.fourDigit:
-        final subMultiplier = ref.watch(effectiveGamePrizeForGameProvider(sub.id))?.exactMultiplier ?? kComboMultiplier;
+        final subMultiplier = ref.watch(effectiveGamePrizeForGameProvider(sub.id))?.exactMultiplier ?? sub.exactMultiplier ?? kComboMultiplier;
         final cart = ref.watch(comboCartControllerProvider((sub.id, subMultiplier)));
         final controller =
             ref.read(comboCartControllerProvider((sub.id, subMultiplier)).notifier);
@@ -691,7 +691,7 @@ class _MultiSorteoGameViewState
         final c = ref.watch(gana3CartControllerProvider(sub.id));
         return (total: c.total, count: c.count, isEmpty: c.isEmpty);
       case GameType.fourDigit:
-        final sumMultiplier = ref.watch(effectiveGamePrizeForGameProvider(sub.id))?.exactMultiplier ?? kComboMultiplier;
+        final sumMultiplier = ref.watch(effectiveGamePrizeForGameProvider(sub.id))?.exactMultiplier ?? sub.exactMultiplier ?? kComboMultiplier;
         final c = ref.watch(comboCartControllerProvider((sub.id, sumMultiplier)));
         return (total: c.total, count: c.count, isEmpty: c.isEmpty);
       case GameType.multiSorteo:
@@ -708,7 +708,7 @@ class _MultiSorteoGameViewState
       case GameType.threeDigit:
         ref.read(gana3CartControllerProvider(sub.id).notifier).clear();
       case GameType.fourDigit:
-        final clrMultiplier = ref.read(effectiveGamePrizeForGameProvider(sub.id))?.exactMultiplier ?? kComboMultiplier;
+        final clrMultiplier = ref.read(effectiveGamePrizeForGameProvider(sub.id))?.exactMultiplier ?? sub.exactMultiplier ?? kComboMultiplier;
         ref.read(comboCartControllerProvider((sub.id, clrMultiplier)).notifier).clear();
       case GameType.multiSorteo:
         return;
@@ -861,7 +861,7 @@ class _MultiSorteoGameViewState
           ),
         );
       case GameType.fourDigit:
-        final printMultiplier = ref.read(effectiveGamePrizeForGameProvider(sub.id))?.exactMultiplier ?? kComboMultiplier;
+        final printMultiplier = ref.read(effectiveGamePrizeForGameProvider(sub.id))?.exactMultiplier ?? sub.exactMultiplier ?? kComboMultiplier;
         final cart = ref.read(comboCartControllerProvider((sub.id, printMultiplier)));
         return _persistAndPrintForSub(
           sub: sub,
@@ -1113,7 +1113,7 @@ class _ComboGameView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final comboMultiplier = ref.watch(effectiveGamePrizeForGameProvider(game.id))?.exactMultiplier ?? kComboMultiplier;
+    final comboMultiplier = ref.watch(effectiveGamePrizeForGameProvider(game.id))?.exactMultiplier ?? game.exactMultiplier ?? kComboMultiplier;
     final cart = ref.watch(comboCartControllerProvider((game.id, comboMultiplier)));
     final controller =
         ref.read(comboCartControllerProvider((game.id, comboMultiplier)).notifier);
@@ -1438,7 +1438,11 @@ Future<void> _printCombo(
       isFourDigit: true,
     ),
     onSuccess: () {
-      final successMultiplier = cart.bets.isNotEmpty ? cart.bets.first.multiplier : kComboMultiplier;
+      // Tiene que coincidir con la clave de familia con la que se creó
+      // el carrito, si no se limpia otro y el real queda cargado.
+      final successMultiplier = cart.bets.isNotEmpty
+          ? cart.bets.first.multiplier
+          : (game.exactMultiplier ?? kComboMultiplier);
       ref.read(comboCartControllerProvider((game.id, successMultiplier)).notifier).clear();
       ref.read(formResetProvider(game.id).notifier).bump();
     },
